@@ -103,6 +103,7 @@
   overflow: hidden;
   background: var(--midnight);
   color: var(--white);
+  min-height: 34rem;
 }
 
 .m-hero h1,
@@ -151,9 +152,12 @@
 
 .m-hero-art {
   position: absolute;
-  right: 6vw;
-  bottom: -2rem;
-  width: min(32vw, 360px);
+  right: 4vw;
+  top: auto;
+  bottom: -1.5rem;
+  left: auto;
+  width: min(42vw, 440px);
+  z-index: 1;
   pointer-events: none;
 }
 
@@ -372,17 +376,21 @@
     width: 100%;
   }
 
-  .m-hero-art,
   .m-grid-3,
   .m-checkout,
   .m-grid {
     grid-template-columns: 1fr;
   }
 
+  .m-hero {
+    min-height: 28rem;
+    padding-bottom: 11rem;
+  }
+
   .m-hero-art {
-    position: static;
-    width: min(70%, 240px);
-    margin: 1.5rem auto 0;
-    display: block;
+    position: absolute;
+    right: -8%;
+    bottom: -1.5rem;
+    width: min(58vw, 260px);
   }
 }
