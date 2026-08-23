@@ -390,7 +390,7 @@ export function App() {
     return (
       <main className="boot">
         <div>
-          <img src="/brand/mascot.jpg" alt="" />
+          <img src="/brand/mascot.png" alt="" />
           <p>socio</p>
         </div>
       </main>
@@ -426,7 +426,7 @@ export function App() {
     return (
       <main className="boot">
         <div>
-          <img src="/brand/mascot.jpg" alt="" />
+          <img src="/brand/mascot.png" alt="" />
           <p>socio</p>
         </div>
       </main>

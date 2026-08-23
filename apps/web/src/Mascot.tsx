@@ -7,7 +7,7 @@ export function Mascot({
 }) {
   return (
     <div className={className ? `m-mascot ${className}` : "m-mascot"}>
-      <img src="/brand/mascot.jpg" alt={alt} />
+      <img src="/brand/mascot.png" alt={alt} />
       <span className="m-mascot-visor" aria-hidden>
         <span className="m-mascot-eye" />
         <span className="m-mascot-eye" />
