@@ -412,6 +412,10 @@ export function App() {
           </button>
           <p className="account-legal">
             <a href="/privacy">Privacy Policy</a>
+            {" · "}
+            <a href="/terms">Terms of Service</a>
+            {" · "}
+            <a href="/data-deletion">Data deletion</a>
           </p>
         </div>
       </aside>
@@ -536,7 +540,19 @@ function AuthScreen({
           </button>
         </form>
         <p className="auth-legal">
-          <a href="/privacy">Privacy Policy</a>
+          {mode === "register" ? (
+            <>
+              By creating a workspace you agree to the{" "}
+              <a href="/terms">Terms of Service</a> and{" "}
+              <a href="/privacy">Privacy Policy</a>.
+            </>
+          ) : (
+            <>
+              <a href="/privacy">Privacy Policy</a>
+              {" · "}
+              <a href="/terms">Terms of Service</a>
+            </>
+          )}
         </p>
       </section>
     </main>
