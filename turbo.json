@@ -9,6 +9,9 @@
     "API_PORT",
     "WEB_ORIGIN",
     "AI_PROVIDER",
+    "OPENAI_API_KEY",
+    "OPENAI_MODEL",
+    "OPENAI_BASE_URL",
     "NODE_ENV"
   ],
   "tasks": {

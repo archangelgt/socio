@@ -14,6 +14,9 @@ import type {
 const ABUSE_WORDS = ["hate", "kill", "scam", "phishing", "spam"];
 
 export class MockAIProvider implements AIProvider {
+  readonly provider = "mock";
+  readonly model = "mock-moderation";
+
   async generate(input: AIRequest): Promise<AIResponse> {
     return { text: `mock-reply:${input.prompt.slice(0, 80)}` };
   }

@@ -1,5 +1,6 @@
 import {
   type Database,
+  brands,
   comments,
   moderationDecisions,
   moderationPolicies,
@@ -27,6 +28,29 @@ import { AppError } from "./errors";
 import { enqueueOutboundAction } from "./outbound";
 import { thumbnailFromMetadata } from "./posts";
 
+async function failModeration(
+  ctx: ServiceContext,
+  comment: { id: string; organizationId: string },
+  eventType: string,
+) {
+  await ctx.db
+    .update(comments)
+    .set({ moderationStatus: "REVIEW_REQUIRED" })
+    .where(
+      and(
+        eq(comments.id, comment.id),
+        eq(comments.organizationId, comment.organizationId),
+      ),
+    );
+  await writeAudit(ctx.db, {
+    organizationId: comment.organizationId,
+    actorType: "system",
+    eventType,
+    entityType: "comment",
+    entityId: comment.id,
+  });
+}
+
 export async function processModeration(
   ctx: ServiceContext,
   commentId: string,
@@ -49,33 +73,36 @@ export async function processModeration(
         .limit(1)
     : [];
 
+  const [brand] = await ctx.db
+    .select()
+    .from(brands)
+    .where(
+      and(
+        eq(brands.id, comment.brandId),
+        eq(brands.organizationId, comment.organizationId),
+      ),
+    )
+    .limit(1);
+
   const started = Date.now();
-  const raw = await ctx.ai.moderate({
-    organizationId: comment.organizationId,
-    text: comment.body,
-    postText: post?.body ?? undefined,
-  });
+  let raw: unknown;
+  try {
+    raw = await ctx.ai.moderate({
+      organizationId: comment.organizationId,
+      text: comment.body,
+      brandName: brand?.name,
+      postText: post?.body ?? undefined,
+    });
+  } catch {
+    await failModeration(ctx, comment, "moderation.provider_failure");
+    return;
+  }
 
   let result: ReturnType<typeof parseModerationResult>;
   try {
     result = parseModerationResult(raw);
   } catch {
-    await ctx.db
-      .update(comments)
-      .set({ moderationStatus: "REVIEW_REQUIRED" })
-      .where(
-        and(
-          eq(comments.id, comment.id),
-          eq(comments.organizationId, comment.organizationId),
-        ),
-      );
-    await writeAudit(ctx.db, {
-      organizationId: comment.organizationId,
-      actorType: "system",
-      eventType: "moderation.invalid_output",
-      entityType: "comment",
-      entityId: comment.id,
-    });
+    await failModeration(ctx, comment, "moderation.invalid_output");
     return;
   }
 
@@ -135,8 +162,8 @@ export async function processModeration(
       commentId: comment.id,
       policyId: policy?.id,
       policyVersion: policy?.id,
-      provider: "mock",
-      model: "mock-moderation",
+      provider: ctx.ai.provider,
+      model: ctx.ai.model,
       categoriesJson: result.categories,
       severity: result.severity,
       confidence: result.overall_confidence,
@@ -163,8 +190,8 @@ export async function processModeration(
 
   await ctx.db.insert(usageEvents).values({
     organizationId: comment.organizationId,
-    provider: "mock",
-    model: "mock-moderation",
+    provider: ctx.ai.provider,
+    model: ctx.ai.model,
     action: "moderate",
     latencyMs: Date.now() - started,
   });

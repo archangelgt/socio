@@ -1,6 +1,6 @@
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
-import { MockAIProvider } from "@social-ai/ai";
+import { createAIProvider } from "@social-ai/ai";
 import { isMetaProvider, metaWebhookChallenge } from "@social-ai/channels";
 import type { Database } from "@social-ai/db";
 import {
@@ -187,6 +187,7 @@ export async function buildApp(options: AppOptions) {
         options.ctx?.meta?.appSecret &&
         options.ctx?.meta?.verifyToken,
     ),
+    aiProvider: options.ctx?.ai.provider ?? "none",
   }));
 
   app.post("/api/v1/auth/register", async (request, reply) => {
@@ -529,7 +530,7 @@ export function buildRuntime(
     {
       db,
       tokenKey,
-      ai: new MockAIProvider(),
+      ai: createAIProvider(),
       meta,
     },
     "await",

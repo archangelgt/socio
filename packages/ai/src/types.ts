@@ -36,7 +36,11 @@ export type EmbeddingResponse = {
   embedding: number[];
 };
 
+export type AIEnv = Record<string, string | undefined>;
+
 export interface AIProvider {
+  readonly provider: string;
+  readonly model: string;
   generate(input: AIRequest): Promise<AIResponse>;
   classify(input: ClassificationRequest): Promise<ClassificationResponse>;
   moderate(input: ModerationRequest): Promise<ModerationResult>;

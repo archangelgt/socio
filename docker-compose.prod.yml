@@ -70,6 +70,10 @@ services:
       META_VERIFY_TOKEN: ${META_VERIFY_TOKEN}
       META_OAUTH_REDIRECT_URI: ${META_OAUTH_REDIRECT_URI}
       META_GRAPH_VERSION: ${META_GRAPH_VERSION:-v21.0}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,6 +111,10 @@ services:
       META_VERIFY_TOKEN: ${META_VERIFY_TOKEN}
       META_OAUTH_REDIRECT_URI: ${META_OAUTH_REDIRECT_URI}
       META_GRAPH_VERSION: ${META_GRAPH_VERSION:-v21.0}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
     depends_on:
       postgres:
         condition: service_healthy
