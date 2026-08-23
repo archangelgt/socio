@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Mascot } from "./Mascot";
 import { type Session, api } from "./api";
 import { MarketingSite } from "./marketing/MarketingSite";
 import { t } from "./marketing/copy";
@@ -534,7 +535,7 @@ function AuthScreen({
     <main className="auth-screen">
       <section className="auth-hero">
         <p className="auth-kicker">Social AI Platform</p>
-        <img src="/brand/mascot.jpg" alt="Mascota de socio" />
+        <Mascot alt="Mascota de socio" />
         <h1>
           Your Social <span>AI Team.</span>
         </h1>

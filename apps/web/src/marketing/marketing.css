@@ -154,7 +154,6 @@
   right: 6vw;
   bottom: -2rem;
   width: min(32vw, 360px);
-  mix-blend-mode: screen;
   pointer-events: none;
 }
 

@@ -8,6 +8,7 @@ import {
   planAmountCents,
 } from "@social-ai/domain";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { Mascot } from "../Mascot";
 import { type Session, api } from "../api";
 import { t } from "./copy";
 import "./marketing.css";
@@ -166,7 +167,7 @@ function HomePage({ locale }: { locale: Locale }) {
           </Link>
         </div>
         <p className="m-note">{text.hero.note}</p>
-        <img src="/brand/mascot.jpg" alt="" className="m-hero-art" />
+        <Mascot className="m-hero-art" />
       </section>
       <p className="m-logos">{text.logos}</p>
       <section className="m-section">
