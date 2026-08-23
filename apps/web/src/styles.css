@@ -406,6 +406,25 @@ form button[type="submit"],
   background: rgb(248 250 252 / 16%);
 }
 
+.auth-legal {
+  margin: 1.15rem 0 0;
+  font-size: 0.8rem;
+  color: var(--gray);
+}
+
+.auth-legal a,
+.account-legal a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.account-legal {
+  margin: 0.75rem 0 0;
+  font-size: 0.75rem;
+  color: rgb(248 250 252 / 55%);
+}
+
 form button[type="submit"],
 .button-row > button:first-child,
 .simulate button {

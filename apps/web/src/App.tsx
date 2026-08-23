@@ -410,6 +410,9 @@ export function App() {
           >
             Sign out
           </button>
+          <p className="account-legal">
+            <a href="/privacy">Privacy Policy</a>
+          </p>
         </div>
       </aside>
       <section className="content">
@@ -532,6 +535,9 @@ function AuthScreen({
             {mode === "register" ? "Let AI do the hard work →" : "Sign in"}
           </button>
         </form>
+        <p className="auth-legal">
+          <a href="/privacy">Privacy Policy</a>
+        </p>
       </section>
     </main>
   );
