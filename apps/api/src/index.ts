@@ -37,6 +37,3 @@ const app = await buildApp({
 });
 
 await app.listen({ host, port });
-
-
-
