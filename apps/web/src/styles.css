@@ -312,7 +312,7 @@ aside {
   color: var(--gray);
 }
 
-nav {
+.shell nav {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -756,7 +756,7 @@ th {
     align-items: center;
   }
 
-  nav {
+  .shell nav {
     flex-direction: row;
     width: 100%;
   }
