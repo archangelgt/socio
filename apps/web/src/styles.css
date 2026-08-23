@@ -269,6 +269,10 @@ aside {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
 }
 
 .brand-lockup {
@@ -373,7 +377,6 @@ nav button.active {
 }
 
 .account {
-  margin-top: auto;
   padding-top: 1rem;
   border-top: 1px solid rgb(248 250 252 / 10%);
 }
@@ -754,6 +757,8 @@ th {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
+    position: static;
+    height: auto;
   }
 
   .shell nav {
