@@ -16,6 +16,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    ports:
+      - "5433:5432"
     networks:
       - socio
 
@@ -62,6 +64,12 @@ services:
       NODE_ENV: production
       API_HOST: 0.0.0.0
       API_PORT: "3001"
+      WEB_ORIGIN: ${WEB_ORIGIN}
+      META_APP_ID: ${META_APP_ID}
+      META_APP_SECRET: ${META_APP_SECRET}
+      META_VERIFY_TOKEN: ${META_VERIFY_TOKEN}
+      META_OAUTH_REDIRECT_URI: ${META_OAUTH_REDIRECT_URI}
+      META_GRAPH_VERSION: ${META_GRAPH_VERSION:-v21.0}
     depends_on:
       postgres:
         condition: service_healthy
@@ -93,6 +101,12 @@ services:
     env_file: .env
     environment:
       NODE_ENV: production
+      WEB_ORIGIN: ${WEB_ORIGIN}
+      META_APP_ID: ${META_APP_ID}
+      META_APP_SECRET: ${META_APP_SECRET}
+      META_VERIFY_TOKEN: ${META_VERIFY_TOKEN}
+      META_OAUTH_REDIRECT_URI: ${META_OAUTH_REDIRECT_URI}
+      META_GRAPH_VERSION: ${META_GRAPH_VERSION:-v21.0}
     depends_on:
       postgres:
         condition: service_healthy
