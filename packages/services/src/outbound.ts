@@ -108,6 +108,9 @@ export async function processOutboundAction(
         externalCommentId: comment.externalCommentId,
         accessToken,
         network,
+        externalPostId: comment.externalPostId,
+        commentBody: comment.body,
+        authorDisplayName: comment.authorDisplayName ?? undefined,
       });
       await ctx.db
         .update(comments)
@@ -118,6 +121,24 @@ export async function processOutboundAction(
             eq(comments.organizationId, action.organizationId),
           ),
         );
+      if (
+        result.externalCommentId &&
+        result.externalCommentId !== comment.externalCommentId
+      ) {
+        try {
+          await ctx.db
+            .update(comments)
+            .set({ externalCommentId: result.externalCommentId })
+            .where(
+              and(
+                eq(comments.id, comment.id),
+                eq(comments.organizationId, action.organizationId),
+              ),
+            );
+        } catch {
+          // Keep the original id if Graph already stored a row for it.
+        }
+      }
       await ctx.db
         .update(moderationActions)
         .set({
@@ -140,6 +161,9 @@ export async function processOutboundAction(
         externalCommentId: comment.externalCommentId,
         accessToken,
         network,
+        externalPostId: comment.externalPostId,
+        commentBody: comment.body,
+        authorDisplayName: comment.authorDisplayName ?? undefined,
       });
       await ctx.db
         .update(comments)
@@ -175,23 +199,35 @@ export async function processOutboundAction(
         : error instanceof ChannelProviderError
           ? { code: error.code, message: error.message }
           : undefined;
+    const message = error instanceof Error ? error.message : "Unknown error";
     await ctx.db
       .update(moderationActions)
       .set({
         status: "failed",
         errorCode: err?.code ?? "PROVIDER_ERROR",
-        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        errorMessage: message,
       })
       .where(eq(moderationActions.id, actionId));
     await ctx.db
       .update(comments)
-      .set({ moderationStatus: "ACTION_FAILED" })
+      .set({
+        moderationStatus: "ACTION_FAILED",
+        status: "visible",
+      })
       .where(
         and(
           eq(comments.id, comment.id),
           eq(comments.organizationId, action.organizationId),
         ),
       );
+    await writeAudit(ctx.db, {
+      organizationId: action.organizationId,
+      actorType: action.source === "policy" ? "ai_policy" : "user",
+      eventType: `moderation.action.${action.actionType}`,
+      entityType: "moderation_action",
+      entityId: action.id,
+    });
+    throw new AppError(502, "CHANNEL_PROVIDER_ERROR", message);
   }
 
   await writeAudit(ctx.db, {

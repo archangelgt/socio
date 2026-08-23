@@ -61,11 +61,15 @@ export type HideCommentInput = {
   /** Injected by the outbound worker after decrypt. Never sent to the browser. */
   accessToken?: string;
   network?: "instagram" | "facebook";
+  externalPostId?: string;
+  commentBody?: string;
+  authorDisplayName?: string;
 };
 
 export type HideCommentResult = {
   ok: boolean;
   externalActionId?: string;
+  externalCommentId?: string;
 };
 
 export type UnhideCommentInput = HideCommentInput;

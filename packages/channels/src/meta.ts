@@ -3,6 +3,7 @@ import {
   type MetaGraphConfig,
   fetchMetaComment,
   graphRequest,
+  hideOrShowInstagramComment,
 } from "./meta-graph";
 import { normalizeMetaPayload, verifyMetaSignature } from "./meta-webhook";
 import { UnsupportedChannelActionError } from "./types";
@@ -92,31 +93,70 @@ export class MetaChannelAdapter implements ChannelAdapter {
 
   async hideComment(
     input: HideCommentInput,
-  ): Promise<{ ok: true; externalActionId: string }> {
+  ): Promise<{ ok: true; externalActionId: string; externalCommentId: string }> {
     const accessToken = requireToken(input);
     const network = networkOf(input);
-    await graphRequest(this.config, {
-      method: "POST",
-      path: `/${input.externalCommentId}`,
+    if (network === "facebook") {
+      await graphRequest(this.config, {
+        method: "POST",
+        path: `/${input.externalCommentId}`,
+        accessToken,
+        query: { is_hidden: "true" },
+        body: { is_hidden: "true" },
+      });
+      return {
+        ok: true,
+        externalActionId: `hide-${input.externalCommentId}`,
+        externalCommentId: input.externalCommentId,
+      };
+    }
+    const commentId = await hideOrShowInstagramComment(this.config, {
       accessToken,
-      query: network === "facebook" ? { is_hidden: "true" } : { hide: "true" },
+      commentId: input.externalCommentId,
+      hide: true,
+      mediaId: input.externalPostId,
+      body: input.commentBody,
+      author: input.authorDisplayName,
     });
-    return { ok: true, externalActionId: `hide-${input.externalCommentId}` };
+    return {
+      ok: true,
+      externalActionId: `hide-${commentId}`,
+      externalCommentId: commentId,
+    };
   }
 
   async unhideComment(
     input: UnhideCommentInput,
-  ): Promise<{ ok: true; externalActionId: string }> {
+  ): Promise<{ ok: true; externalActionId: string; externalCommentId: string }> {
     const accessToken = requireToken(input);
     const network = networkOf(input);
-    await graphRequest(this.config, {
-      method: "POST",
-      path: `/${input.externalCommentId}`,
+    if (network === "facebook") {
+      await graphRequest(this.config, {
+        method: "POST",
+        path: `/${input.externalCommentId}`,
+        accessToken,
+        query: { is_hidden: "false" },
+        body: { is_hidden: "false" },
+      });
+      return {
+        ok: true,
+        externalActionId: `unhide-${input.externalCommentId}`,
+        externalCommentId: input.externalCommentId,
+      };
+    }
+    const commentId = await hideOrShowInstagramComment(this.config, {
       accessToken,
-      query:
-        network === "facebook" ? { is_hidden: "false" } : { hide: "false" },
+      commentId: input.externalCommentId,
+      hide: false,
+      mediaId: input.externalPostId,
+      body: input.commentBody,
+      author: input.authorDisplayName,
     });
-    return { ok: true, externalActionId: `unhide-${input.externalCommentId}` };
+    return {
+      ok: true,
+      externalActionId: `unhide-${commentId}`,
+      externalCommentId: commentId,
+    };
   }
 
   async deleteComment(_input: DeleteCommentInput): Promise<never> {

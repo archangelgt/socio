@@ -216,6 +216,140 @@ export async function fetchMetaComment(
   }
 }
 
+export type InstagramCommentRef = {
+  id: string;
+  text: string;
+  username?: string;
+};
+
+type GraphCommentNode = {
+  id: string;
+  text?: string;
+  username?: string;
+  from?: { username?: string };
+  replies?: { data?: GraphCommentNode[] };
+};
+
+function commentRef(row: GraphCommentNode): InstagramCommentRef {
+  return {
+    id: row.id,
+    text: row.text ?? "",
+    username: row.from?.username ?? row.username,
+  };
+}
+
+export function matchInstagramComment(
+  comments: InstagramCommentRef[],
+  input: { commentId: string; body?: string; author?: string },
+): InstagramCommentRef | undefined {
+  const byId = comments.find((item) => item.id === input.commentId);
+  if (byId) {
+    return byId;
+  }
+  const body = input.body?.trim();
+  if (!body) {
+    return undefined;
+  }
+  const matches = comments.filter((item) => item.text.trim() === body);
+  const author = input.author?.replace(/^@/, "").trim().toLowerCase();
+  if (author) {
+    const named = matches.find(
+      (item) => item.username?.replace(/^@/, "").toLowerCase() === author,
+    );
+    if (named) {
+      return named;
+    }
+  }
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+export async function listInstagramCommentsOnMedia(
+  config: MetaGraphConfig,
+  input: { accessToken: string; mediaId: string },
+): Promise<InstagramCommentRef[]> {
+  const response = await graphRequest<{ data?: GraphCommentNode[] }>(config, {
+    path: `/${input.mediaId}/comments`,
+    accessToken: input.accessToken,
+    query: {
+      fields:
+        "id,text,username,from,replies.limit(50){id,text,username,from}",
+      limit: "50",
+    },
+  });
+  const comments: InstagramCommentRef[] = [];
+  for (const row of response.data ?? []) {
+    comments.push(commentRef(row));
+    for (const reply of row.replies?.data ?? []) {
+      comments.push(commentRef(reply));
+    }
+  }
+  return comments;
+}
+
+async function postInstagramHide(
+  config: MetaGraphConfig,
+  input: { accessToken: string; commentId: string; hide: boolean },
+) {
+  const flag = input.hide ? "true" : "false";
+  await graphRequest(config, {
+    method: "POST",
+    path: `/${input.commentId}`,
+    accessToken: input.accessToken,
+    query: { hide: flag },
+    body: { hide: flag },
+  });
+}
+
+export async function hideOrShowInstagramComment(
+  config: MetaGraphConfig,
+  input: {
+    accessToken: string;
+    commentId: string;
+    hide: boolean;
+    mediaId?: string;
+    body?: string;
+    author?: string;
+  },
+): Promise<string> {
+  try {
+    await postInstagramHide(config, input);
+    return input.commentId;
+  } catch (error) {
+    if (
+      !(error instanceof ChannelProviderError) ||
+      !input.mediaId ||
+      (error.code !== "validation_error" &&
+        error.code !== "not_found" &&
+        error.code !== "forbidden")
+    ) {
+      throw error;
+    }
+    let listed: InstagramCommentRef[];
+    try {
+      listed = await listInstagramCommentsOnMedia(config, {
+        accessToken: input.accessToken,
+        mediaId: input.mediaId,
+      });
+    } catch {
+      throw error;
+    }
+    const match = matchInstagramComment(listed, {
+      commentId: input.commentId,
+      body: input.body,
+      author: input.author,
+    });
+    if (!match || match.id === input.commentId) {
+      throw error;
+    }
+    await postInstagramHide(config, {
+      accessToken: input.accessToken,
+      commentId: match.id,
+      hide: input.hide,
+    });
+    return match.id;
+  }
+}
+
 export type InstagramMediaComment = {
   mediaId: string;
   commentId: string;

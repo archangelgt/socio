@@ -2,7 +2,11 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { ChannelProviderError } from "./errors";
 import { MetaChannelAdapter } from "./meta";
-import { listInstagramMediaComments, pickMediaThumbnail } from "./meta-graph";
+import {
+  listInstagramMediaComments,
+  matchInstagramComment,
+  pickMediaThumbnail,
+} from "./meta-graph";
 import {
   buildMetaAuthorizationUrl,
   parseMetaOAuthState,
@@ -207,6 +211,74 @@ describe("MetaChannelAdapter", () => {
     const called = JSON.stringify(fetchImpl.mock.calls);
     expect(called).toContain("/v21.0/c1");
     expect(called).toContain("hide=true");
+  });
+
+  it("resolves a Graph comment id when the webhook id cannot be hidden", async () => {
+    const fetchImpl = vi.fn(async (url: URL, init?: RequestInit) => {
+      const href = String(url);
+      if (href.includes("/m1/comments")) {
+        return new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: "graph-c1",
+                text: "Huecos todos",
+                username: "l_potter_g",
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (href.includes("/webhook-c1") && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: "Unsupported post request. Object with ID 'webhook-c1'",
+              code: 100,
+            },
+          }),
+          { status: 400 },
+        );
+      }
+      if (href.includes("/graph-c1") && init?.method === "POST") {
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ error: { message: "nope" } }), {
+        status: 500,
+      });
+    });
+    const adapter = new MetaChannelAdapter({
+      appSecret: APP_SECRET,
+      verifyToken: "verify-me",
+      graphVersion: "v21.0",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const result = await adapter.hideComment({
+      organizationId: "org-1",
+      accountId: "17841",
+      externalCommentId: "webhook-c1",
+      accessToken: "page-token",
+      network: "instagram",
+      externalPostId: "m1",
+      commentBody: "Huecos todos",
+      authorDisplayName: "l_potter_g",
+    });
+    expect(result.externalCommentId).toBe("graph-c1");
+    expect(result.externalActionId).toBe("hide-graph-c1");
+  });
+
+  it("matches Instagram comments by body when webhook ids differ", () => {
+    expect(
+      matchInstagramComment(
+        [{ id: "graph-c1", text: "Huecos todos", username: "l_potter_g" }],
+        {
+          commentId: "webhook-c1",
+          body: "Huecos todos",
+          author: "l_potter_g",
+        },
+      )?.id,
+    ).toBe("graph-c1");
   });
 
   it("lists Instagram media comments from Graph", async () => {

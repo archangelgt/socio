@@ -407,6 +407,21 @@ export async function humanModerate(
     throw new AppError(404, "COMMENT_NOT_FOUND", "Comment not found.");
   }
 
+  const [account] = await ctx.db
+    .select({
+      id: socialAccounts.id,
+      provider: socialAccounts.provider,
+    })
+    .from(socialAccounts)
+    .where(
+      and(
+        eq(socialAccounts.id, comment.socialAccountId),
+        eq(socialAccounts.organizationId, input.organizationId),
+      ),
+    )
+    .limit(1);
+  const accountProvider = account?.provider ?? "instagram";
+
   if (input.action === "allow" || input.action === "restore") {
     const nextStatus = input.action === "restore" ? "OVERRIDDEN" : "APPROVED";
     await ctx.db
@@ -437,7 +452,7 @@ export async function humanModerate(
         socialAccountId: comment.socialAccountId,
         source: "human",
         actionType: "unhide",
-        provider: "mock",
+        provider: accountProvider,
       });
     }
 
@@ -466,7 +481,6 @@ export async function humanModerate(
     .update(comments)
     .set({
       moderationStatus: "APPROVED",
-      status: "hidden",
     })
     .where(
       and(
@@ -482,7 +496,7 @@ export async function humanModerate(
     socialAccountId: comment.socialAccountId,
     source: "human",
     actionType: "hide",
-    provider: "mock",
+    provider: accountProvider,
   });
 
   await writeAudit(ctx.db, {
