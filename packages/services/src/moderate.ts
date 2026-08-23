@@ -20,7 +20,7 @@ import {
   evaluateModerationPolicy,
   parseModerationResult,
 } from "@social-ai/moderation";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { getChannelAdapter } from "./adapters";
 import { writeAudit } from "./audit";
 import type { ServiceContext } from "./context";
@@ -28,11 +28,62 @@ import { AppError } from "./errors";
 import { enqueueOutboundAction } from "./outbound";
 import { thumbnailFromMetadata } from "./posts";
 
+function publicProviderError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : "Unknown error";
+  return raw.replace(/sk-[a-zA-Z0-9_-]+/gi, "sk-***").slice(0, 300);
+}
+
+async function insertFallbackDecision(
+  db: Database,
+  comment: { id: string; organizationId: string; brandId: string },
+  input: { provider: string; model: string; rationale: string },
+) {
+  const [existing] = await db
+    .select({ id: moderationDecisions.id })
+    .from(moderationDecisions)
+    .where(eq(moderationDecisions.commentId, comment.id))
+    .limit(1);
+  if (existing) {
+    return existing;
+  }
+
+  const [saved] = await db
+    .insert(moderationDecisions)
+    .values({
+      organizationId: comment.organizationId,
+      brandId: comment.brandId,
+      commentId: comment.id,
+      provider: input.provider,
+      model: input.model,
+      categoriesJson: [{ name: "other", confidence: 0 }],
+      severity: "NONE",
+      confidence: 0,
+      rationale: input.rationale,
+      recommendedAction: "FLAG",
+      finalAction: "FLAG",
+      status: "REVIEW_REQUIRED",
+    })
+    .returning();
+  return saved;
+}
+
 async function failModeration(
   ctx: ServiceContext,
-  comment: { id: string; organizationId: string },
+  comment: { id: string; organizationId: string; brandId: string },
   eventType: string,
+  error?: unknown,
 ) {
+  const rationale = `AI unavailable: ${publicProviderError(error)}`;
+  console.error("moderation failed", {
+    commentId: comment.id,
+    eventType,
+    error: publicProviderError(error),
+  });
+  await insertFallbackDecision(ctx.db, comment, {
+    provider: ctx.ai.provider,
+    model: ctx.ai.model,
+    rationale,
+  });
   await ctx.db
     .update(comments)
     .set({ moderationStatus: "REVIEW_REQUIRED" })
@@ -48,6 +99,7 @@ async function failModeration(
     eventType,
     entityType: "comment",
     entityId: comment.id,
+    metadata: { error: publicProviderError(error) },
   });
 }
 
@@ -93,16 +145,16 @@ export async function processModeration(
       brandName: brand?.name,
       postText: post?.body ?? undefined,
     });
-  } catch {
-    await failModeration(ctx, comment, "moderation.provider_failure");
+  } catch (error) {
+    await failModeration(ctx, comment, "moderation.provider_failure", error);
     return;
   }
 
   let result: ReturnType<typeof parseModerationResult>;
   try {
     result = parseModerationResult(raw);
-  } catch {
-    await failModeration(ctx, comment, "moderation.invalid_output");
+  } catch (error) {
+    await failModeration(ctx, comment, "moderation.invalid_output", error);
     return;
   }
 
@@ -231,6 +283,33 @@ export async function listModerationQueue(
   organizationId: string,
   status?: string,
 ) {
+  const orphans = await db
+    .select({
+      id: comments.id,
+      organizationId: comments.organizationId,
+      brandId: comments.brandId,
+    })
+    .from(comments)
+    .leftJoin(
+      moderationDecisions,
+      eq(moderationDecisions.commentId, comments.id),
+    )
+    .where(
+      and(
+        eq(comments.organizationId, organizationId),
+        inArray(comments.moderationStatus, ["PENDING", "REVIEW_REQUIRED"]),
+        isNull(moderationDecisions.id),
+      ),
+    );
+
+  for (const orphan of orphans) {
+    await insertFallbackDecision(db, orphan, {
+      provider: "system",
+      model: "unavailable",
+      rationale: "AI unavailable; queued for human review.",
+    });
+  }
+
   const filters = [
     eq(moderationDecisions.organizationId, organizationId),
     eq(comments.organizationId, organizationId),

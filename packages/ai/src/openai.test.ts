@@ -80,6 +80,19 @@ describe("OpenAICompatibleProvider", () => {
     });
     await expect(
       ai.moderate({ organizationId: "org-1", text: "hola" }),
-    ).rejects.toThrow(/quota/);
+    ).rejects.toThrow(/OpenAI HTTP 429: quota/);
+  });
+
+  it("throws a refusal instead of an empty result", async () => {
+    const ai = new OpenAICompatibleProvider({
+      apiKey: "sk-test",
+      fetchImpl: (async () =>
+        Response.json({
+          choices: [{ message: { content: null, refusal: "refused" } }],
+        })) as unknown as typeof fetch,
+    });
+    await expect(
+      ai.moderate({ organizationId: "org-1", text: "hola" }),
+    ).rejects.toThrow(/refused/);
   });
 });

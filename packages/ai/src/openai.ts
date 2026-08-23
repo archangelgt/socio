@@ -84,7 +84,9 @@ export type OpenAICompatibleConfig = {
 };
 
 type ChatCompletionResponse = {
-  choices?: Array<{ message?: { content?: string | null } }>;
+  choices?: Array<{
+    message?: { content?: string | null; refusal?: string | null };
+  }>;
 };
 
 export class OpenAICompatibleProvider implements AIProvider {
@@ -155,14 +157,19 @@ export class OpenAICompatibleProvider implements AIProvider {
     };
     if (!response.ok) {
       throw new AIProviderError(
-        body.error?.message ?? `OpenAI HTTP ${response.status}`,
+        body.error?.message
+          ? `OpenAI HTTP ${response.status}: ${body.error.message}`
+          : `OpenAI HTTP ${response.status}`,
         response.status,
       );
     }
 
-    const content = body.choices?.[0]?.message?.content;
+    const message = body.choices?.[0]?.message;
+    const content = message?.content;
     if (!content) {
-      throw new AIProviderError("OpenAI returned an empty moderation result.");
+      throw new AIProviderError(
+        message?.refusal || "OpenAI returned an empty moderation result.",
+      );
     }
 
     let parsed: unknown;
