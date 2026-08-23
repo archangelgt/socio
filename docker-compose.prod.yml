@@ -110,17 +110,19 @@ services:
       target: web
     container_name: socio-web
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:${SOCIO_PORT:-8090}:80"
     depends_on:
       api:
         condition: service_healthy
     networks:
       - socio
+      - edge
 
 networks:
   socio:
     name: socio_net
+  edge:
+    name: root_erpsys-network
+    external: true
 
 volumes:
   postgres_data:

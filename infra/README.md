@@ -12,15 +12,15 @@ pnpm docker:up
 
 ## Production
 
-All app processes run in Docker. Apache on the host only proxies `socio.seraphsystems.com` to `127.0.0.1:8090`.
+Droplet **socio** (`146.190.132.169`). App containers join `socio_net`; `socio-web` also joins `root_erpsys-network` so `erpsys-nginx` can proxy it.
 
 ```bash
 ./scripts/deploy.sh
 ```
 
-- Compose file: `docker-compose.prod.yml`
+- Compose: `docker-compose.prod.yml`
 - Image: `infra/docker/Dockerfile`
-- Vhosts: `infra/apache/socio.conf` and `infra/apache/socio-le-ssl.conf`
-- Server dir: `/mnt/volume_nyc1_01/socio`
+- Edge vhost: `infra/nginx/socio.conf`
+- Server dir: `/opt/socio`
 
-Do not change other vhosts, containers, or certs on the server.
+Do not change other nginx vhosts or containers on that host.

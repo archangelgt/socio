@@ -34,7 +34,7 @@ pnpm check    # biome + typecheck + tests
 
 ## Production
 
-Everything runs in Docker containers. The host Apache vhost `socio.seraphsystems.com` proxies to `127.0.0.1:8090` and does not change other sites.
+Everything runs in Docker containers on droplet **socio** (`146.190.132.169`). `erpsys-nginx` proxies `socio.seraphsystems.com` to `socio-web` and does not change other vhosts.
 
 ```bash
 ./scripts/deploy.sh

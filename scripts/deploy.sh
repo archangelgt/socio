@@ -1,33 +1,31 @@
 #!/usr/bin/env bash
-# Deploy Socio to socio.seraphsystems.com.
-# Touches only: /mnt/volume_nyc1_01/socio, socio_* containers, socio Apache vhosts.
+# Deploy Socio to droplet 146.190.132.169 (nomsys-restsys).
+# Touches only: /opt/socio, socio_* containers, nginx conf.d/socio.conf, ssl/socio, cert socio.seraphsystems.com.
 set -euo pipefail
 
-HOST="${DEPLOY_HOST:-root@seraphsystems.com}"
-REMOTE_DIR="${DEPLOY_DIR:-/mnt/volume_nyc1_01/socio}"
+HOST="${DEPLOY_HOST:-root@146.190.132.169}"
+REMOTE_DIR="${DEPLOY_DIR:-/opt/socio}"
 COMPOSE="docker-compose.prod.yml"
 DOMAIN="socio.seraphsystems.com"
-HTTP_CONF="socio.conf"
-SSL_CONF="socio-le-ssl.conf"
-HTTP_DEST="/etc/httpd/conf.d/${HTTP_CONF}"
-SSL_DEST="/etc/httpd/conf.d/${SSL_CONF}"
+NGINX_DEST="/root/config/nginx/conf.d/socio.conf"
+SSL_DEST="/root/config/nginx/ssl/socio"
+WEBROOT="/root/certbot-webroot"
 
 cd "$(dirname "$0")/.."
 
 assert_dns() {
-  local server_ip dns_ip
-  server_ip=$(ssh "$HOST" "hostname -I | awk '{print \$1}'")
+  local dns_ip
   dns_ip=$(dig +short "$DOMAIN" A | tail -1)
-  if [[ -z "$dns_ip" ]]; then
-    echo "No A record for $DOMAIN" >&2
-    exit 1
-  fi
-  if [[ "$dns_ip" != "$server_ip" ]]; then
-    echo "DNS mismatch: $DOMAIN → $dns_ip, this server is $server_ip" >&2
-    echo "Point the GoDaddy A record to $server_ip (same as seraphsystems.com), then re-run." >&2
+  if [[ "$dns_ip" != "146.190.132.169" ]]; then
+    echo "DNS mismatch: $DOMAIN → ${dns_ip:-none}, expected 146.190.132.169" >&2
     exit 1
   fi
   echo "→ DNS $DOMAIN → $dns_ip"
+}
+
+nginx_reload() {
+  echo "→ nginx -t && reload erpsys-nginx"
+  ssh "$HOST" "docker exec erpsys-nginx nginx -t && docker exec erpsys-nginx nginx -s reload"
 }
 
 rsync_code() {
@@ -77,27 +75,29 @@ compose_up() {
 }
 
 install_http_vhost() {
-  echo "→ Install Apache HTTP vhost $HTTP_DEST (new file only)"
-  ssh "$HOST" "install -m 644 '$REMOTE_DIR/infra/apache/${HTTP_CONF}' '$HTTP_DEST'"
+  echo "→ Install HTTP nginx vhost $NGINX_DEST (new/replace socio.conf only)"
+  ssh "$HOST" "install -m 644 '$REMOTE_DIR/infra/nginx/socio-http.conf' '$NGINX_DEST'"
 }
 
 install_ssl_vhost() {
-  echo "→ Install Apache SSL vhost $SSL_DEST (new file only)"
-  ssh "$HOST" "install -m 644 '$REMOTE_DIR/infra/apache/${SSL_CONF}' '$SSL_DEST'"
-}
-
-reload_httpd() {
-  echo "→ Apache configtest + graceful reload"
-  ssh "$HOST" "apachectl configtest && systemctl reload httpd"
+  echo "→ Install HTTPS nginx vhost $NGINX_DEST (socio.conf only)"
+  ssh "$HOST" "install -m 644 '$REMOTE_DIR/infra/nginx/socio.conf' '$NGINX_DEST'"
 }
 
 ensure_cert() {
   if ssh "$HOST" "test -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem"; then
     echo "→ TLS cert already exists for $DOMAIN"
-    return
+  else
+    echo "→ Request Let's Encrypt cert for $DOMAIN only"
+    ssh "$HOST" "certbot certonly --webroot -w '$WEBROOT' -d '$DOMAIN' --non-interactive --agree-tos -m gmorales@seraphsystems.com --cert-name '$DOMAIN'"
   fi
-  echo "→ Request Let's Encrypt cert for $DOMAIN only"
-  ssh "$HOST" "certbot certonly --webroot -w /var/www/letsencrypt -d '$DOMAIN' --non-interactive --agree-tos -m gmorales@seraphsystems.com"
+  echo "→ Copy cert into nginx ssl/socio"
+  ssh "$HOST" "
+    set -euo pipefail
+    mkdir -p '$SSL_DEST'
+    cp -L '/etc/letsencrypt/live/$DOMAIN/fullchain.pem' '$SSL_DEST/'
+    cp -L '/etc/letsencrypt/live/$DOMAIN/privkey.pem' '$SSL_DEST/'
+  "
 }
 
 wait_health() {
@@ -115,14 +115,14 @@ wait_health() {
   exit 1
 }
 
+assert_dns
 rsync_code
 ensure_env
 compose_up
 install_http_vhost
-reload_httpd
-assert_dns
+nginx_reload
 ensure_cert
 install_ssl_vhost
-reload_httpd
+nginx_reload
 wait_health
 echo "→ Deployed https://$DOMAIN"
