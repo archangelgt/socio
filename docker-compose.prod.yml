@@ -74,6 +74,11 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-tilopay}
+      TILOPAY_API_URL: ${TILOPAY_API_URL:-https://app.tilopay.com/api/v1/processPayment}
+      TILOPAY_API_KEY: ${TILOPAY_API_KEY:-}
+      TILOPAY_API_USER: ${TILOPAY_API_USER:-}
+      TILOPAY_API_PASSWORD: ${TILOPAY_API_PASSWORD:-}
     depends_on:
       postgres:
         condition: service_healthy

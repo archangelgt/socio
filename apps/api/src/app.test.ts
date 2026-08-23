@@ -14,6 +14,21 @@ describe("api", () => {
     await app.close();
   });
 
+  it("returns public checkout config", async () => {
+    const app = await buildApp({
+      sessionSecret: "test-session-secret-32-characters!",
+      webOrigin: "http://localhost:5173",
+      logger: false,
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/checkout/config",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ provider: "mock" });
+    await app.close();
+  });
+
   it("maps missing database on /auth/me to 503", async () => {
     const app = await buildApp({
       sessionSecret: "test-session-secret-32-characters!",

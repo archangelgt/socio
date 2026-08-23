@@ -173,4 +173,25 @@ export const api = {
       method: "POST",
       body: payload,
     }),
+  checkoutConfig: () =>
+    request<{ provider: string; configured: boolean }>(
+      "/api/v1/checkout/config",
+    ),
+  createCheckout: (body: {
+    planId: string;
+    interval: string;
+    email: string;
+    organizationName: string;
+    successUrl: string;
+    cancelUrl: string;
+  }) =>
+    request<{
+      url: string;
+      provider: string;
+      configured: boolean;
+      planId: string;
+      interval: string;
+      amountCents: number;
+      currency: string;
+    }>("/api/v1/checkout/session", { method: "POST", body }),
 };

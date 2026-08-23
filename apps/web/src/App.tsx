@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { type Session, api } from "./api";
+import { MarketingSite } from "./marketing/MarketingSite";
+import { t } from "./marketing/copy";
+import { detectLocale, href, navigate, parseRoute } from "./marketing/route";
 
 type Page = "inbox" | "moderation" | "channels";
 
@@ -326,8 +329,21 @@ export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [page, setPage] = useState<Page>("moderation");
   const [error, setError] = useState<string | null>(null);
+  const [path, setPath] = useState(
+    () => window.location.pathname + window.location.search,
+  );
 
   const organizationId = session?.memberships[0]?.organizationId;
+  const pathname = path.split("?")[0] ?? "/";
+  const route = parseRoute(pathname, navigator.language);
+  const locale = detectLocale(navigator.language);
+
+  useEffect(() => {
+    const onPop = () =>
+      setPath(window.location.pathname + window.location.search);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   useEffect(() => {
     void api
@@ -335,6 +351,22 @@ export function App() {
       .then(setSession)
       .catch(() => setSession(null));
   }, []);
+
+  useEffect(() => {
+    if (route.kind === "redirect") {
+      window.history.replaceState({}, "", route.to);
+      setPath(route.to);
+    }
+  }, [route]);
+
+  useEffect(() => {
+    if (route.kind === "login" && session) {
+      navigate("/app");
+    }
+    if (route.kind === "app" && session === null) {
+      navigate("/login");
+    }
+  }, [route.kind, session]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -349,8 +381,45 @@ export function App() {
     }
     if (meta) {
       window.history.replaceState({}, "", window.location.pathname);
+      setPath(window.location.pathname);
     }
   }, []);
+
+  if (route.kind === "redirect") {
+    return (
+      <main className="boot">
+        <div>
+          <img src="/brand/mascot.jpg" alt="" />
+          <p>socio</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (route.kind === "marketing") {
+    return (
+      <MarketingSite
+        locale={route.locale}
+        page={route.page}
+        slug={route.slug}
+        session={session}
+      />
+    );
+  }
+
+  if (route.kind === "login") {
+    return (
+      <AuthScreen
+        locale={locale}
+        onAuthed={(next) => {
+          setSession(next);
+          navigate("/app");
+        }}
+        error={error}
+        setError={setError}
+      />
+    );
+  }
 
   if (session === undefined) {
     return (
@@ -365,7 +434,15 @@ export function App() {
 
   if (session === null) {
     return (
-      <AuthScreen onAuthed={setSession} error={error} setError={setError} />
+      <AuthScreen
+        locale={locale}
+        onAuthed={(next) => {
+          setSession(next);
+          navigate("/app");
+        }}
+        error={error}
+        setError={setError}
+      />
     );
   }
 
@@ -436,10 +513,12 @@ export function App() {
 }
 
 function AuthScreen({
+  locale,
   onAuthed,
   error,
   setError,
 }: {
+  locale: "es" | "en" | "pt";
   onAuthed: (session: Session) => void;
   error: string | null;
   setError: (value: string | null) => void;
@@ -449,6 +528,7 @@ function AuthScreen({
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [organizationName, setOrganizationName] = useState("");
+  const text = t(locale);
 
   return (
     <main className="auth-screen">
@@ -464,6 +544,17 @@ function AuthScreen({
         </p>
       </section>
       <section className="auth-panel">
+        <p className="muted">
+          <a
+            href={href(locale)}
+            onClick={(event) => {
+              event.preventDefault();
+              navigate(href(locale));
+            }}
+          >
+            ← {text.auth.back}
+          </a>
+        </p>
         <BrandLockup light />
         <p className="muted">Smarter conversations. Safer communities.</p>
         <div className="tabs">

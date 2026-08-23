@@ -7,8 +7,10 @@ import {
   AppError,
   type MetaConfig,
   type ServiceContext,
+  checkoutConfigFromEnv,
   completeMetaOAuth,
   connectMockChannel,
+  createCheckoutSession,
   createInlineRuntime,
   getAppError,
   getPost,
@@ -190,6 +192,33 @@ export async function buildApp(options: AppOptions) {
     aiProvider: options.ctx?.ai.provider ?? "none",
   }));
 
+  app.get("/api/v1/checkout/config", async () => checkoutConfigFromEnv());
+
+  app.post("/api/v1/checkout/session", async (request) => {
+    await loadSession(request);
+    const body = z
+      .object({
+        planId: z.string().min(1),
+        interval: z.string().min(1),
+        email: z.string().email(),
+        organizationName: z.string().min(1),
+        successUrl: z.string().url(),
+        cancelUrl: z.string().url(),
+      })
+      .parse(request.body);
+    const origin = new URL(options.webOrigin).origin;
+    for (const url of [body.successUrl, body.cancelUrl]) {
+      if (new URL(url).origin !== origin) {
+        throw new AppError(
+          400,
+          "INVALID_REDIRECT",
+          "Checkout redirects must stay on this site.",
+        );
+      }
+    }
+    return createCheckoutSession(body);
+  });
+
   app.post("/api/v1/auth/register", async (request, reply) => {
     const ctx = requireCtx(options.ctx);
     const body = registerSchema.parse(request.body);
@@ -306,7 +335,7 @@ export async function buildApp(options: AppOptions) {
           error_description: z.string().optional(),
         })
         .parse(request.query);
-      const target = new URL(options.webOrigin);
+      const target = new URL("/app", options.webOrigin);
       const fail = (message: string) => {
         target.searchParams.set("meta", "error");
         target.searchParams.set("meta_error", message);
