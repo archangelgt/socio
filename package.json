@@ -1,0 +1,26 @@
+{
+  "name": "social-ai-platform",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "check": "biome check . && turbo typecheck test",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "deploy": "./scripts/deploy.sh",
+    "db:generate": "pnpm --filter @social-ai/db generate",
+    "db:migrate": "pnpm --filter @social-ai/db migrate"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "turbo": "^2.4.2"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@social-ai/services",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@social-ai/ai": "workspace:*",
+    "@social-ai/channels": "workspace:*",
+    "@social-ai/db": "workspace:*",
+    "@social-ai/domain": "workspace:*",
+    "@social-ai/moderation": "workspace:*",
+    "argon2": "^0.41.1",
+    "drizzle-orm": "^0.39.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

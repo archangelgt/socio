@@ -1,0 +1,127 @@
+name: socio
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: socio-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-socio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-socio}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-socio} -d ${POSTGRES_DB:-socio}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - socio
+
+  redis:
+    image: redis:7-alpine
+    container_name: socio-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - socio
+
+  migrate:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile
+      target: migrate
+    container_name: socio-migrate
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - socio
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile
+      target: api
+    container_name: socio-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      API_PORT: "3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - socio
+
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile
+      target: worker
+    container_name: socio-worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - socio
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile
+      target: web
+    container_name: socio-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${SOCIO_PORT:-8090}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - socio
+
+networks:
+  socio:
+    name: socio_net
+
+volumes:
+  postgres_data:
+  redis_data:

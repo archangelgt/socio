@@ -1,0 +1,28 @@
+{
+  "name": "@social-ai/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=../../.env src/index.ts",
+    "start": "tsx --env-file=../../.env src/index.ts",
+    "start:prod": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node -e \"process.exit(0)\"",
+    "build": "node -e \"process.exit(0)\""
+  },
+  "dependencies": {
+    "@social-ai/ai": "workspace:*",
+    "@social-ai/channels": "workspace:*",
+    "@social-ai/db": "workspace:*",
+    "@social-ai/domain": "workspace:*",
+    "@social-ai/services": "workspace:*",
+    "bullmq": "^5.40.0",
+    "ioredis": "^5.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

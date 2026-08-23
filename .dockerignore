@@ -1,0 +1,16 @@
+.git
+.cursor
+.turbo
+node_modules
+**/node_modules
+dist
+**/dist
+apps/web/dist
+coverage
+.env
+.env.local
+.env.production
+*.log
+.DS_Store
+agent-transcripts
+**/*.tsbuildinfo

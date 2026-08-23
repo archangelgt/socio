@@ -1,0 +1,6 @@
+---
+description: Ritual de commit, push y deploy de Socio. Siempre aplicar cuando el usuario dice ritual.
+alwaysApply: true
+---
+
+Cuando el usuario diga **ritual**, **the ritual**, **haz el ritual** o pida commit + push + deploy de Socio, seguir `.cursor/skills/ritual/SKILL.md`.
