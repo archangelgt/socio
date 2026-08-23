@@ -10,7 +10,8 @@ Commit, push, and deploy **only** Socio.
 Production URL: `https://socio.seraphsystems.com`  
 Remote: `git@github.com:archangelgt/socio.git`  
 Server path: `/mnt/volume_nyc1_01/socio`  
-Host: `root@seraphsystems.com`
+Host: `root@seraphsystems.com`  
+DNS A record must be this server (`67.205.130.140`), same as `seraphsystems.com`. Do not point `socio` at other droplets.
 
 ## Isolation
 

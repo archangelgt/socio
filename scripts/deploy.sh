@@ -14,6 +14,22 @@ SSL_DEST="/etc/httpd/conf.d/${SSL_CONF}"
 
 cd "$(dirname "$0")/.."
 
+assert_dns() {
+  local server_ip dns_ip
+  server_ip=$(ssh "$HOST" "hostname -I | awk '{print \$1}'")
+  dns_ip=$(dig +short "$DOMAIN" A | tail -1)
+  if [[ -z "$dns_ip" ]]; then
+    echo "No A record for $DOMAIN" >&2
+    exit 1
+  fi
+  if [[ "$dns_ip" != "$server_ip" ]]; then
+    echo "DNS mismatch: $DOMAIN → $dns_ip, this server is $server_ip" >&2
+    echo "Point the GoDaddy A record to $server_ip (same as seraphsystems.com), then re-run." >&2
+    exit 1
+  fi
+  echo "→ DNS $DOMAIN → $dns_ip"
+}
+
 rsync_code() {
   echo "→ Sync $HOST:$REMOTE_DIR"
   ssh "$HOST" "mkdir -p '$REMOTE_DIR'"
@@ -104,6 +120,7 @@ ensure_env
 compose_up
 install_http_vhost
 reload_httpd
+assert_dns
 ensure_cert
 install_ssl_vhost
 reload_httpd

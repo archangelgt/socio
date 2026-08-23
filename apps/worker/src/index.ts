@@ -22,6 +22,6 @@ if (!redisUrl) {
   );
 }
 
-await new Promise<void>(() => {
-  /* keep process alive in `pnpm dev` */
-});
+setInterval(() => {
+  /* keep process alive until BullMQ consumers land */
+}, 60_000);
