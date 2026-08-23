@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ChannelProviderError } from "./errors";
 import { MetaChannelAdapter } from "./meta";
 import {
+  hideCandidateIds,
   listInstagramMediaComments,
   matchInstagramComment,
   pickMediaThumbnail,
@@ -279,6 +280,85 @@ describe("MetaChannelAdapter", () => {
         },
       )?.id,
     ).toBe("graph-c1");
+  });
+
+  it("prefers a Graph id over the webhook id for the same comment", () => {
+    expect(
+      matchInstagramComment(
+        [
+          { id: "webhook-c1", text: "Huecos todos", username: "l_potter_g" },
+          { id: "graph-c1", text: "Huecos todos", username: "l_potter_g" },
+        ],
+        {
+          commentId: "webhook-c1",
+          body: "Huecos todos",
+          author: "l_potter_g",
+        },
+      )?.id,
+    ).toBe("graph-c1");
+    expect(
+      hideCandidateIds(
+        [
+          { id: "webhook-c1", text: "Huecos todos", username: "l_potter_g" },
+          { id: "graph-c1", text: "Huecos todos", username: "l_potter_g" },
+        ],
+        {
+          commentId: "webhook-c1",
+          body: "Huecos todos",
+          author: "l_potter_g",
+        },
+      ),
+    ).toEqual(["graph-c1"]);
+  });
+
+  it("explains Meta tester access when Instagram still refuses hide", async () => {
+    const fetchImpl = vi.fn(async (url: URL, init?: RequestInit) => {
+      const href = String(url);
+      if (href.includes("/m1/comments") || href.includes("/17841/media")) {
+        return new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: "webhook-c1",
+                text: "Huecos todos",
+                username: "l_potter_g",
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          error: {
+            message:
+              "Unsupported post request. Object with ID 'webhook-c1' does not exist, cannot be loaded due to missing permissions, or does not support this operation.",
+            code: 100,
+          },
+        }),
+        { status: 400 },
+      );
+    });
+    const adapter = new MetaChannelAdapter({
+      appSecret: APP_SECRET,
+      verifyToken: "verify-me",
+      graphVersion: "v21.0",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await expect(
+      adapter.hideComment({
+        organizationId: "org-1",
+        accountId: "17841",
+        externalCommentId: "webhook-c1",
+        accessToken: "page-token",
+        network: "instagram",
+        externalPostId: "m1",
+        commentBody: "Huecos todos",
+        authorDisplayName: "l_potter_g",
+      }),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("Advanced Access"),
+    });
   });
 
   it("lists Instagram media comments from Graph", async () => {

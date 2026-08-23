@@ -115,6 +115,7 @@ export class MetaChannelAdapter implements ChannelAdapter {
       commentId: input.externalCommentId,
       hide: true,
       mediaId: input.externalPostId,
+      igUserId: input.accountId,
       body: input.commentBody,
       author: input.authorDisplayName,
     });
@@ -149,6 +150,7 @@ export class MetaChannelAdapter implements ChannelAdapter {
       commentId: input.externalCommentId,
       hide: false,
       mediaId: input.externalPostId,
+      igUserId: input.accountId,
       body: input.commentBody,
       author: input.authorDisplayName,
     });

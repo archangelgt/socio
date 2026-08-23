@@ -220,12 +220,14 @@ export type InstagramCommentRef = {
   id: string;
   text: string;
   username?: string;
+  legacyId?: string;
 };
 
 type GraphCommentNode = {
   id: string;
   text?: string;
   username?: string;
+  legacy_instagram_comment_id?: string;
   from?: { username?: string };
   replies?: { data?: GraphCommentNode[] };
 };
@@ -235,32 +237,53 @@ function commentRef(row: GraphCommentNode): InstagramCommentRef {
     id: row.id,
     text: row.text ?? "",
     username: row.from?.username ?? row.username,
+    legacyId: row.legacy_instagram_comment_id,
   };
+}
+
+function normalizeHandle(value: string | undefined): string {
+  return value?.replace(/^@/, "").trim().toLowerCase() ?? "";
+}
+
+export function hideCandidateIds(
+  comments: InstagramCommentRef[],
+  input: { commentId: string; body?: string; author?: string },
+): string[] {
+  const ids: string[] = [];
+  const add = (id?: string) => {
+    if (id && id !== input.commentId && !ids.includes(id)) {
+      ids.push(id);
+    }
+  };
+  const body = input.body?.trim();
+  const author = normalizeHandle(input.author);
+  for (const item of comments) {
+    const bodyOk = Boolean(body) && item.text.trim() === body;
+    const authorOk =
+      !author || normalizeHandle(item.username) === author || !item.username;
+    if (item.id === input.commentId) {
+      add(item.legacyId);
+      continue;
+    }
+    if (bodyOk && authorOk) {
+      add(item.id);
+      add(item.legacyId);
+    }
+  }
+  return ids;
 }
 
 export function matchInstagramComment(
   comments: InstagramCommentRef[],
   input: { commentId: string; body?: string; author?: string },
 ): InstagramCommentRef | undefined {
-  const byId = comments.find((item) => item.id === input.commentId);
-  if (byId) {
-    return byId;
-  }
-  const body = input.body?.trim();
-  if (!body) {
-    return undefined;
-  }
-  const matches = comments.filter((item) => item.text.trim() === body);
-  const author = input.author?.replace(/^@/, "").trim().toLowerCase();
-  if (author) {
-    const named = matches.find(
-      (item) => item.username?.replace(/^@/, "").toLowerCase() === author,
+  const candidateId = hideCandidateIds(comments, input)[0];
+  if (candidateId) {
+    return comments.find(
+      (item) => item.id === candidateId || item.legacyId === candidateId,
     );
-    if (named) {
-      return named;
-    }
   }
-  return matches.length === 1 ? matches[0] : undefined;
+  return comments.find((item) => item.id === input.commentId);
 }
 
 export async function listInstagramCommentsOnMedia(
@@ -272,7 +295,7 @@ export async function listInstagramCommentsOnMedia(
     accessToken: input.accessToken,
     query: {
       fields:
-        "id,text,username,from,replies.limit(50){id,text,username,from}",
+        "id,text,username,from,legacy_instagram_comment_id,replies.limit(50){id,text,username,from,legacy_instagram_comment_id}",
       limit: "50",
     },
   });
@@ -300,6 +323,57 @@ async function postInstagramHide(
   });
 }
 
+async function collectInstagramCommentRefs(
+  config: MetaGraphConfig,
+  input: { accessToken: string; mediaId?: string; igUserId?: string },
+): Promise<InstagramCommentRef[]> {
+  const refs: InstagramCommentRef[] = [];
+  const seen = new Set<string>();
+  const push = (item: InstagramCommentRef) => {
+    const key = `${item.id}:${item.legacyId ?? ""}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    refs.push(item);
+  };
+  if (input.mediaId) {
+    try {
+      const listed = await listInstagramCommentsOnMedia(config, {
+        accessToken: input.accessToken,
+        mediaId: input.mediaId,
+      });
+      for (const item of listed) {
+        push(item);
+      }
+    } catch {
+      // Try the account media edge next.
+    }
+  }
+  if (input.igUserId) {
+    try {
+      const listed = await listInstagramMediaComments(config, {
+        accessToken: input.accessToken,
+        igUserId: input.igUserId,
+      });
+      for (const item of listed) {
+        if (input.mediaId && item.mediaId !== input.mediaId) {
+          continue;
+        }
+        push({
+          id: item.commentId,
+          text: item.body,
+          username: item.authorDisplayName,
+          legacyId: item.legacyId,
+        });
+      }
+    } catch {
+      // Keep whatever the media comments edge returned.
+    }
+  }
+  return refs;
+}
+
 export async function hideOrShowInstagramComment(
   config: MetaGraphConfig,
   input: {
@@ -307,6 +381,7 @@ export async function hideOrShowInstagramComment(
     commentId: string;
     hide: boolean;
     mediaId?: string;
+    igUserId?: string;
     body?: string;
     author?: string;
   },
@@ -317,36 +392,55 @@ export async function hideOrShowInstagramComment(
   } catch (error) {
     if (
       !(error instanceof ChannelProviderError) ||
-      !input.mediaId ||
+      (!input.mediaId && !input.igUserId) ||
       (error.code !== "validation_error" &&
         error.code !== "not_found" &&
         error.code !== "forbidden")
     ) {
       throw error;
     }
-    let listed: InstagramCommentRef[];
-    try {
-      listed = await listInstagramCommentsOnMedia(config, {
-        accessToken: input.accessToken,
-        mediaId: input.mediaId,
-      });
-    } catch {
-      throw error;
-    }
-    const match = matchInstagramComment(listed, {
+    const listed = await collectInstagramCommentRefs(config, input);
+    const candidates = hideCandidateIds(listed, {
       commentId: input.commentId,
       body: input.body,
       author: input.author,
     });
-    if (!match || match.id === input.commentId) {
-      throw error;
+    try {
+      const current = await graphRequest<{
+        id?: string;
+        legacy_instagram_comment_id?: string;
+      }>(config, {
+        path: `/${input.commentId}`,
+        accessToken: input.accessToken,
+        query: { fields: "id,legacy_instagram_comment_id" },
+      });
+      if (
+        current.legacy_instagram_comment_id &&
+        current.legacy_instagram_comment_id !== input.commentId &&
+        !candidates.includes(current.legacy_instagram_comment_id)
+      ) {
+        candidates.push(current.legacy_instagram_comment_id);
+      }
+    } catch {
+      // Webhook ids are often not readable as Graph nodes.
     }
-    await postInstagramHide(config, {
-      accessToken: input.accessToken,
-      commentId: match.id,
-      hide: input.hide,
-    });
-    return match.id;
+    for (const commentId of candidates) {
+      try {
+        await postInstagramHide(config, {
+          accessToken: input.accessToken,
+          commentId,
+          hide: input.hide,
+        });
+        return commentId;
+      } catch {
+        // Try the next Graph id.
+      }
+    }
+    throw new ChannelProviderError(
+      error.code,
+      `${error.message} Instagram often blocks hide unless the commenter is a Meta app tester or instagram_manage_comments has Advanced Access.`,
+      error.status,
+    );
   }
 }
 
@@ -362,6 +456,7 @@ export type InstagramMediaComment = {
   permalink?: string;
   thumbnailUrl?: string;
   mediaType?: string;
+  legacyId?: string;
 };
 
 type GraphMediaNode = {
@@ -415,6 +510,7 @@ export async function listInstagramMediaComments(
           timestamp?: string;
           parent_id?: string;
           from?: { id?: string; username?: string; name?: string };
+          legacy_instagram_comment_id?: string;
         }>;
       };
     }>;
@@ -423,7 +519,7 @@ export async function listInstagramMediaComments(
     accessToken: input.accessToken,
     query: {
       fields:
-        "id,caption,media_type,media_url,thumbnail_url,permalink,children{media_url,thumbnail_url,media_type},comments.limit(50){id,text,username,timestamp,from,parent_id}",
+        "id,caption,media_type,media_url,thumbnail_url,permalink,children{media_url,thumbnail_url,media_type},comments.limit(50){id,text,username,timestamp,from,parent_id,legacy_instagram_comment_id}",
       limit: "8",
     },
   });
@@ -445,6 +541,7 @@ export async function listInstagramMediaComments(
         permalink: media.permalink,
         thumbnailUrl,
         mediaType: media.media_type,
+        legacyId: comment.legacy_instagram_comment_id,
       });
     }
   }
