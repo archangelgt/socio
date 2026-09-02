@@ -62,6 +62,19 @@ describe("Meta OAuth state", () => {
     expect(url).toContain("facebook.com/v21.0/dialog/oauth");
     expect(url).toContain("client_id=123");
     expect(url).toContain("instagram_manage_comments");
+    expect(url).not.toContain("config_id=");
+  });
+
+  it("prefers Login for Business config_id over scope", () => {
+    const url = buildMetaAuthorizationUrl({
+      appId: "123",
+      redirectUri: "http://localhost:3001/api/v1/channels/oauth/meta/callback",
+      state: "abc",
+      graphVersion: "v21.0",
+      configId: "2115425045994185",
+    });
+    expect(url).toContain("config_id=2115425045994185");
+    expect(url).not.toContain("scope=");
   });
 });
 

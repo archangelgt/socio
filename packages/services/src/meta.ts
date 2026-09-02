@@ -63,6 +63,7 @@ export function startMetaOAuth(
       redirectUri: config.redirectUri,
       state,
       graphVersion: config.graphVersion,
+      configId: config.loginConfigId,
     }),
   };
 }

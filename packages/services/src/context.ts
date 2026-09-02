@@ -8,6 +8,8 @@ export type MetaConfig = {
   verifyToken: string;
   redirectUri: string;
   graphVersion: string;
+  /** Facebook Login for Business configuration ID (`config_id` on dialog/oauth). */
+  loginConfigId?: string;
   fetchImpl?: typeof fetch;
 };
 

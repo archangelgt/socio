@@ -24,6 +24,7 @@ const meta: MetaConfig | undefined = (() => {
       process.env.META_OAUTH_REDIRECT_URI ??
       "http://localhost:3001/api/v1/channels/oauth/meta/callback",
     graphVersion: process.env.META_GRAPH_VERSION ?? "v21.0",
+    loginConfigId: process.env.META_LOGIN_CONFIG_ID || undefined,
   };
 })();
 

@@ -73,5 +73,5 @@ Postgres is required (`pnpm docker:up`). BullMQ consumers, invitations, and tags
 2. Valid OAuth redirect (production): `https://socio.seraphsystems.com/api/v1/channels/oauth/meta/callback`. Local: `http://localhost:3001/api/v1/channels/oauth/meta/callback`.
 3. Webhooks need a public HTTPS URL pointing at `POST /api/v1/webhooks/meta`, verify token = `META_VERIFY_TOKEN`.
 4. Subscribe the app to Instagram `comments` + `messages` and Page `feed` + `messages`.
-5. Permissions used: `pages_show_list`, `pages_read_engagement`, `pages_manage_engagement`, `pages_manage_metadata`, `pages_messaging`, `instagram_basic`, `instagram_manage_comments`, `instagram_manage_messages`, `business_management`.
+5. For Facebook Login for Business, create a Configuration in the App Dashboard and set `META_LOGIN_CONFIG_ID` (OAuth uses `config_id` instead of raw `scope`). Fallback scopes when unset: `pages_show_list`, `pages_read_engagement`, `pages_manage_engagement`, `pages_manage_metadata`, `pages_messaging`, `instagram_basic`, `instagram_manage_comments`, `instagram_manage_messages`, `business_management`.
 6. Use a Facebook Page with a linked Instagram professional account. App Review is required before production hide works.

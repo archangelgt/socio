@@ -65,6 +65,8 @@ export function buildMetaAuthorizationUrl(input: {
   redirectUri: string;
   state: string;
   graphVersion: string;
+  /** Facebook Login for Business configuration ID. Prefer over scope. */
+  configId?: string;
 }): string {
   const url = new URL(
     `https://www.facebook.com/${input.graphVersion}/dialog/oauth`,
@@ -73,6 +75,12 @@ export function buildMetaAuthorizationUrl(input: {
   url.searchParams.set("redirect_uri", input.redirectUri);
   url.searchParams.set("state", input.state);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", META_OAUTH_SCOPES);
+  if (input.configId) {
+    // Login for Business: config_id replaces scope. Scope-only installs fail with
+    // "This app needs at least one supported permission" for external users.
+    url.searchParams.set("config_id", input.configId);
+  } else {
+    url.searchParams.set("scope", META_OAUTH_SCOPES);
+  }
   return url.toString();
 }
