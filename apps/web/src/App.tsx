@@ -948,6 +948,25 @@ function ChannelsPage({
               >
                 {item.status}
               </span>
+              <button
+                type="button"
+                className="disconnect"
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      `Disconnect ${item.displayName}? Inbound events for this account will stop.`,
+                    )
+                  ) {
+                    return;
+                  }
+                  void api
+                    .disconnectChannel(organizationId, item.id)
+                    .then(reload)
+                    .catch((err: Error) => setError(err.message));
+                }}
+              >
+                Disconnect
+              </button>
             </li>
           ))}
         </ul>
@@ -993,6 +1012,11 @@ function ChannelsPage({
           Connect Meta
         </button>
       </div>
+      <p className="muted">
+        Connect Meta links every Facebook Page (and linked Instagram) your
+        Facebook user can manage — including Disruptorxs if you are a Page
+        admin. Disconnect any account you do not want in this workspace.
+      </p>
       {metaConfigured ? null : (
         <p className="muted">
           Meta OAuth needs META_APP_ID, META_APP_SECRET, and META_VERIFY_TOKEN

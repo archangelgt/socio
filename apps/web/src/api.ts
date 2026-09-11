@@ -98,6 +98,20 @@ export const api = {
       organizationId,
       body,
     }),
+  disconnectChannel: (organizationId: string, channelId: string) =>
+    request<{
+      channel: {
+        id: string;
+        provider: string;
+        displayName: string;
+        externalAccountId: string;
+        status: string;
+        brandId: string;
+      };
+    }>(`/api/v1/channels/${channelId}`, {
+      method: "DELETE",
+      organizationId,
+    }),
   comments: (organizationId: string) =>
     request<{
       comments: {

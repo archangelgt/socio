@@ -32,7 +32,12 @@ export {
   type MembershipView,
   type PublicUser,
 } from "./auth";
-export { connectMockChannel, listBrands, listChannels } from "./channels";
+export {
+  connectMockChannel,
+  disconnectChannel,
+  listBrands,
+  listChannels,
+} from "./channels";
 export { completeMetaOAuth, startMetaOAuth } from "./meta";
 export { ingestWebhook, processInboundEvent } from "./inbound";
 export { syncInstagramComments } from "./sync";

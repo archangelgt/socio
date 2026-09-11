@@ -38,7 +38,7 @@ export async function connectMockChannel(
     ? input.externalAccountId
     : `${prefix}${input.externalAccountId}`;
 
-  const [existing] = await db
+  const [existingActive] = await db
     .select()
     .from(socialAccounts)
     .where(
@@ -50,14 +50,67 @@ export async function connectMockChannel(
     )
     .limit(1);
 
-  if (existing) {
+  if (existingActive) {
     return {
-      id: existing.id,
-      provider: existing.provider,
-      displayName: existing.displayName,
-      externalAccountId: existing.externalAccountId,
-      status: existing.status,
-      brandId: existing.brandId,
+      id: existingActive.id,
+      provider: existingActive.provider,
+      displayName: existingActive.displayName,
+      externalAccountId: existingActive.externalAccountId,
+      status: existingActive.status,
+      brandId: existingActive.brandId,
+    };
+  }
+
+  const [existingDisconnected] = await db
+    .select()
+    .from(socialAccounts)
+    .where(
+      and(
+        eq(socialAccounts.organizationId, input.organizationId),
+        eq(socialAccounts.provider, "mock"),
+        eq(socialAccounts.externalAccountId, externalAccountId),
+      ),
+    )
+    .limit(1);
+
+  if (existingDisconnected) {
+    const [reactivated] = await db
+      .update(socialAccounts)
+      .set({
+        brandId: brand.id,
+        displayName: input.displayName,
+        accessTokenEncrypted: encryptSecret("mock-token", input.tokenKey),
+        status: "active",
+        updatedAt: new Date(),
+      })
+      .where(eq(socialAccounts.id, existingDisconnected.id))
+      .returning();
+
+    if (!reactivated) {
+      throw new AppError(
+        500,
+        "CHANNEL_CONNECT_FAILED",
+        "Could not connect channel.",
+      );
+    }
+
+    await writeAudit(db, {
+      organizationId: input.organizationId,
+      actorType: "user",
+      actorId: input.actorId,
+      eventType: "channel.connected",
+      entityType: "social_account",
+      entityId: reactivated.id,
+      metadata: { provider: "mock", reconnected: true },
+    });
+
+    return {
+      id: reactivated.id,
+      provider: reactivated.provider,
+      displayName: reactivated.displayName,
+      externalAccountId: reactivated.externalAccountId,
+      status: reactivated.status,
+      brandId: reactivated.brandId,
     };
   }
 
@@ -124,9 +177,89 @@ export async function listChannels(db: Database, organizationId: string) {
       brandId: socialAccounts.brandId,
     })
     .from(socialAccounts)
-    .where(eq(socialAccounts.organizationId, organizationId));
+    .where(
+      and(
+        eq(socialAccounts.organizationId, organizationId),
+        eq(socialAccounts.status, "active"),
+      ),
+    );
 
   return rows;
+}
+
+export async function disconnectChannel(
+  db: Database,
+  input: {
+    organizationId: string;
+    actorId: string;
+    channelId: string;
+    tokenKey: string;
+  },
+) {
+  const [account] = await db
+    .select()
+    .from(socialAccounts)
+    .where(
+      and(
+        eq(socialAccounts.id, input.channelId),
+        eq(socialAccounts.organizationId, input.organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!account) {
+    throw new AppError(404, "CHANNEL_NOT_FOUND", "Channel not found.");
+  }
+
+  if (account.status === "disconnected") {
+    return {
+      id: account.id,
+      provider: account.provider,
+      displayName: account.displayName,
+      externalAccountId: account.externalAccountId,
+      status: account.status,
+      brandId: account.brandId,
+    };
+  }
+
+  const [updated] = await db
+    .update(socialAccounts)
+    .set({
+      status: "disconnected",
+      accessTokenEncrypted: encryptSecret("", input.tokenKey),
+      refreshTokenEncrypted: null,
+      tokenExpiresAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(socialAccounts.id, account.id))
+    .returning();
+
+  if (!updated) {
+    throw new AppError(
+      500,
+      "CHANNEL_DISCONNECT_FAILED",
+      "Could not disconnect channel.",
+    );
+  }
+
+  await writeAudit(db, {
+    organizationId: input.organizationId,
+    actorType: "user",
+    actorId: input.actorId,
+    eventType: "channel.disconnected",
+    entityType: "social_account",
+    entityId: updated.id,
+    metadata: { provider: updated.provider },
+  });
+
+  return {
+    id: updated.id,
+    provider: updated.provider,
+    displayName: updated.displayName,
+    externalAccountId: updated.externalAccountId,
+    status: updated.status,
+    brandId: updated.brandId,
+  };
 }
 
 export async function listBrands(db: Database, organizationId: string) {

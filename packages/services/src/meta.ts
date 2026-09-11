@@ -83,7 +83,7 @@ async function upsertConnectedAccount(
     metadata: Record<string, unknown>;
   },
 ) {
-  const [existing] = await db
+  const [activeElsewhere] = await db
     .select()
     .from(socialAccounts)
     .where(
@@ -95,7 +95,10 @@ async function upsertConnectedAccount(
     )
     .limit(1);
 
-  if (existing && existing.organizationId !== input.organizationId) {
+  if (
+    activeElsewhere &&
+    activeElsewhere.organizationId !== input.organizationId
+  ) {
     throw new AppError(
       409,
       "CHANNEL_IN_USE",
@@ -103,20 +106,47 @@ async function upsertConnectedAccount(
     );
   }
 
+  const [existingInOrg] = await db
+    .select()
+    .from(socialAccounts)
+    .where(
+      and(
+        eq(socialAccounts.organizationId, input.organizationId),
+        eq(socialAccounts.provider, input.provider),
+        eq(socialAccounts.externalAccountId, input.externalAccountId),
+      ),
+    )
+    .limit(1);
+
+  const existing = existingInOrg ?? activeElsewhere;
   const encrypted = encryptSecret(input.accessToken, input.tokenKey);
 
   if (existing) {
+    const wasDisconnected = existing.status !== "active";
     const [updated] = await db
       .update(socialAccounts)
       .set({
+        brandId: input.brandId,
         displayName: input.displayName,
         accessTokenEncrypted: encrypted,
         tokenExpiresAt: input.tokenExpiresAt,
         metadataJson: input.metadata,
+        status: "active",
         updatedAt: new Date(),
       })
       .where(eq(socialAccounts.id, existing.id))
       .returning();
+    if (wasDisconnected && updated) {
+      await writeAudit(db, {
+        organizationId: input.organizationId,
+        actorType: "user",
+        actorId: input.actorId,
+        eventType: "channel.connected",
+        entityType: "social_account",
+        entityId: updated.id,
+        metadata: { provider: input.provider, reconnected: true },
+      });
+    }
     return updated ?? existing;
   }
 

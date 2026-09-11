@@ -12,6 +12,7 @@ import {
   connectMockChannel,
   createCheckoutSession,
   createInlineRuntime,
+  disconnectChannel,
   getAppError,
   getPost,
   getPostPreview,
@@ -319,6 +320,23 @@ export async function buildApp(options: AppOptions) {
       actorId: session.user.id,
       tokenKey: ctx.tokenKey,
       ...body,
+    });
+    return { channel };
+  });
+
+  app.delete("/api/v1/channels/:id", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "ADMIN",
+    );
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const channel = await disconnectChannel(ctx.db, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      channelId: params.id,
+      tokenKey: ctx.tokenKey,
     });
     return { channel };
   });
