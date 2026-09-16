@@ -54,6 +54,10 @@ export {
   listConversations,
   type InboxListFilters,
 } from "./comments";
+export {
+  resolveLinkedAccountIds,
+  resolveInboxAccountIds,
+} from "./account-filter";
 export { getPostPreview, hydrateMissingPostMedia } from "./posts";
 export {
   checkoutConfigFromEnv,

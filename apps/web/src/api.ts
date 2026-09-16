@@ -81,6 +81,7 @@ export const api = {
         externalAccountId: string;
         status: string;
         brandId: string;
+        pageId: string | null;
       }[];
     }>("/api/v1/channels", { organizationId }),
   connectMock: (

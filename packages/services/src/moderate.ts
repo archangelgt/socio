@@ -21,9 +21,10 @@ import {
   parseModerationResult,
 } from "@social-ai/moderation";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import type { InboxListFilters } from "./account-filter";
+import { resolveInboxAccountIds } from "./account-filter";
 import { getChannelAdapter } from "./adapters";
 import { writeAudit } from "./audit";
-import type { InboxListFilters } from "./comments";
 import type { ServiceContext } from "./context";
 import { AppError } from "./errors";
 import { enqueueOutboundAction } from "./outbound";
@@ -285,26 +286,11 @@ export async function listModerationQueue(
   options: { status?: string } & InboxListFilters = {},
 ) {
   const { status, socialAccountId, brandId } = options;
+  const accountIds = await resolveInboxAccountIds(db, organizationId, {
+    socialAccountId,
+    brandId,
+  });
 
-  if (socialAccountId) {
-    const [account] = await db
-      .select({ id: socialAccounts.id })
-      .from(socialAccounts)
-      .where(
-        and(
-          eq(socialAccounts.id, socialAccountId),
-          eq(socialAccounts.organizationId, organizationId),
-        ),
-      )
-      .limit(1);
-    if (!account) {
-      throw new AppError(
-        404,
-        "ACCOUNT_NOT_FOUND",
-        "Social account not found in this workspace.",
-      );
-    }
-  }
   if (brandId) {
     const [brand] = await db
       .select({ id: brands.id })
@@ -327,8 +313,8 @@ export async function listModerationQueue(
     inArray(comments.moderationStatus, ["PENDING", "REVIEW_REQUIRED"]),
     isNull(moderationDecisions.id),
   ];
-  if (socialAccountId) {
-    orphanFilters.push(eq(comments.socialAccountId, socialAccountId));
+  if (accountIds && accountIds.length > 0) {
+    orphanFilters.push(inArray(comments.socialAccountId, accountIds));
   }
   if (brandId) {
     orphanFilters.push(eq(comments.brandId, brandId));
@@ -362,8 +348,8 @@ export async function listModerationQueue(
   if (status && (QUEUE_STATES as readonly string[]).includes(status)) {
     filters.push(eq(comments.moderationStatus, status as QueueState));
   }
-  if (socialAccountId) {
-    filters.push(eq(comments.socialAccountId, socialAccountId));
+  if (accountIds && accountIds.length > 0) {
+    filters.push(inArray(comments.socialAccountId, accountIds));
   }
   if (brandId) {
     filters.push(eq(comments.brandId, brandId));

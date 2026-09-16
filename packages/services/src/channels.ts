@@ -175,6 +175,7 @@ export async function listChannels(db: Database, organizationId: string) {
       externalAccountId: socialAccounts.externalAccountId,
       status: socialAccounts.status,
       brandId: socialAccounts.brandId,
+      metadataJson: socialAccounts.metadataJson,
     })
     .from(socialAccounts)
     .where(
@@ -184,7 +185,23 @@ export async function listChannels(db: Database, organizationId: string) {
       ),
     );
 
-  return rows;
+  return rows.map((row) => {
+    const metadata =
+      row.metadataJson && typeof row.metadataJson === "object"
+        ? (row.metadataJson as Record<string, unknown>)
+        : {};
+    const pageId =
+      typeof metadata.pageId === "string" ? metadata.pageId : undefined;
+    return {
+      id: row.id,
+      provider: row.provider,
+      displayName: row.displayName,
+      externalAccountId: row.externalAccountId,
+      status: row.status,
+      brandId: row.brandId,
+      pageId: pageId ?? null,
+    };
+  });
 }
 
 export async function disconnectChannel(

@@ -87,6 +87,8 @@ Query filters for inbox lists (`GET /api/v1/comments`, `GET /api/v1/conversation
 
 List items include `socialAccountId`, `accountDisplayName`, `provider`, `brandId`, and `brandName`.
 
+Filtering by `socialAccountId` includes Meta Page + linked Instagram siblings that share the same `metadata.pageId` (so CADI Facebook and `@cadi.gt` are one area).
+
 `POST /api/v1/comments/:id/reply` body: `{ "text": string }` (1–2000 chars). Human reply only; queues outbound `reply` via the channel adapter. Not an AI suggested-reply endpoint.
 
 ## Tags

@@ -9,66 +9,23 @@ import {
   socialAccounts,
 } from "@social-ai/db";
 import { type SQL, and, desc, eq, inArray } from "drizzle-orm";
-import { AppError } from "./errors";
+import {
+  type InboxListFilters,
+  assertFiltersInOrg,
+  resolveInboxAccountIds,
+} from "./account-filter";
 import { thumbnailFromMetadata } from "./posts";
 
-export type InboxListFilters = {
-  socialAccountId?: string;
-  brandId?: string;
-};
-
-async function assertFiltersInOrg(
-  db: Database,
-  organizationId: string,
-  filters: InboxListFilters,
-): Promise<void> {
-  if (filters.socialAccountId) {
-    const [account] = await db
-      .select({ id: socialAccounts.id })
-      .from(socialAccounts)
-      .where(
-        and(
-          eq(socialAccounts.id, filters.socialAccountId),
-          eq(socialAccounts.organizationId, organizationId),
-        ),
-      )
-      .limit(1);
-    if (!account) {
-      throw new AppError(
-        404,
-        "ACCOUNT_NOT_FOUND",
-        "Social account not found in this workspace.",
-      );
-    }
-  }
-  if (filters.brandId) {
-    const [brand] = await db
-      .select({ id: brands.id })
-      .from(brands)
-      .where(
-        and(
-          eq(brands.id, filters.brandId),
-          eq(brands.organizationId, organizationId),
-        ),
-      )
-      .limit(1);
-    if (!brand) {
-      throw new AppError(
-        404,
-        "BRAND_NOT_FOUND",
-        "Brand not found in this workspace.",
-      );
-    }
-  }
-}
+export type { InboxListFilters } from "./account-filter";
 
 function commentFilters(
   organizationId: string,
   filters: InboxListFilters,
+  accountIds?: string[],
 ): SQL[] {
   const clauses: SQL[] = [eq(comments.organizationId, organizationId)];
-  if (filters.socialAccountId) {
-    clauses.push(eq(comments.socialAccountId, filters.socialAccountId));
+  if (accountIds && accountIds.length > 0) {
+    clauses.push(inArray(comments.socialAccountId, accountIds));
   }
   if (filters.brandId) {
     clauses.push(eq(comments.brandId, filters.brandId));
@@ -82,6 +39,7 @@ export async function listComments(
   filters: InboxListFilters = {},
 ) {
   await assertFiltersInOrg(db, organizationId, filters);
+  const accountIds = await resolveInboxAccountIds(db, organizationId, filters);
 
   const rows = await db
     .select({
@@ -108,7 +66,7 @@ export async function listComments(
     .leftJoin(posts, eq(posts.id, comments.postId))
     .innerJoin(socialAccounts, eq(socialAccounts.id, comments.socialAccountId))
     .innerJoin(brands, eq(brands.id, comments.brandId))
-    .where(and(...commentFilters(organizationId, filters)))
+    .where(and(...commentFilters(organizationId, filters, accountIds)))
     .orderBy(desc(comments.createdAt))
     .limit(100);
 
@@ -153,10 +111,11 @@ export async function listConversations(
   filters: InboxListFilters = {},
 ) {
   await assertFiltersInOrg(db, organizationId, filters);
+  const accountIds = await resolveInboxAccountIds(db, organizationId, filters);
 
   const clauses: SQL[] = [eq(conversations.organizationId, organizationId)];
-  if (filters.socialAccountId) {
-    clauses.push(eq(conversations.socialAccountId, filters.socialAccountId));
+  if (accountIds && accountIds.length > 0) {
+    clauses.push(inArray(conversations.socialAccountId, accountIds));
   }
   if (filters.brandId) {
     clauses.push(eq(conversations.brandId, filters.brandId));

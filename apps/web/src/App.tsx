@@ -309,18 +309,79 @@ type ChannelOption = Awaited<
   ReturnType<typeof api.channels>
 >["channels"][number];
 
+type AccountGroup = {
+  key: string;
+  label: string;
+  primaryAccountId: string;
+  accountIds: string[];
+};
+
+function groupChannels(channels: ChannelOption[]): AccountGroup[] {
+  const byPage = new Map<string, ChannelOption[]>();
+  const singles: ChannelOption[] = [];
+
+  for (const channel of channels) {
+    if (channel.pageId) {
+      const bucket = byPage.get(channel.pageId) ?? [];
+      bucket.push(channel);
+      byPage.set(channel.pageId, bucket);
+      continue;
+    }
+    singles.push(channel);
+  }
+
+  const groups: AccountGroup[] = [];
+  for (const [pageId, members] of byPage) {
+    const facebook = members.find((item) => item.provider === "facebook");
+    const primary = facebook ?? members[0];
+    if (!primary) {
+      continue;
+    }
+    groups.push({
+      key: pageId,
+      label: facebook?.displayName ?? primary.displayName,
+      primaryAccountId: primary.id,
+      accountIds: members.map((item) => item.id),
+    });
+  }
+  for (const channel of singles) {
+    groups.push({
+      key: channel.id,
+      label: channel.displayName,
+      primaryAccountId: channel.id,
+      accountIds: [channel.id],
+    });
+  }
+  return groups.sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function selectedGroup(
+  groups: AccountGroup[],
+  accountId: string,
+): AccountGroup | undefined {
+  if (!accountId) {
+    return undefined;
+  }
+  return groups.find(
+    (group) =>
+      group.primaryAccountId === accountId ||
+      group.accountIds.includes(accountId),
+  );
+}
+
 function AccountSwitcher({
-  channels,
+  groups,
   value,
   onChange,
 }: {
-  channels: ChannelOption[];
+  groups: AccountGroup[];
   value: string;
   onChange: (accountId: string) => void;
 }) {
-  if (channels.length === 0) {
+  if (groups.length === 0) {
     return null;
   }
+  const active = selectedGroup(groups, value);
   return (
     <div
       className="account-switcher"
@@ -330,24 +391,27 @@ function AccountSwitcher({
       <button
         type="button"
         role="tab"
-        aria-selected={value === ""}
-        className={value === "" ? "active" : ""}
+        aria-selected={!active}
+        className={!active ? "active" : ""}
         onClick={() => onChange("")}
       >
         All accounts
       </button>
-      {channels.map((channel) => (
-        <button
-          key={channel.id}
-          type="button"
-          role="tab"
-          aria-selected={value === channel.id}
-          className={value === channel.id ? "active" : ""}
-          onClick={() => onChange(channel.id)}
-        >
-          {channel.displayName}
-        </button>
-      ))}
+      {groups.map((group) => {
+        const isActive = active?.key === group.key;
+        return (
+          <button
+            key={group.key}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            className={isActive ? "active" : ""}
+            onClick={() => onChange(group.primaryAccountId)}
+          >
+            {group.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -810,6 +874,7 @@ function ModerationPage({
   const [replyFor, setReplyFor] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replyBusy, setReplyBusy] = useState(false);
+  const groups = groupChannels(channels);
 
   const reload = useCallback(() => {
     void api
@@ -825,10 +890,8 @@ function ModerationPage({
       .channels(organizationId)
       .then((data) => {
         setChannels(data.channels);
-        if (
-          accountId &&
-          !data.channels.some((channel) => channel.id === accountId)
-        ) {
+        const nextGroups = groupChannels(data.channels);
+        if (accountId && !selectedGroup(nextGroups, accountId)) {
           setAccountId("");
           storeAccountId(organizationId, "");
         }
@@ -840,9 +903,7 @@ function ModerationPage({
     reload();
   }, [reload]);
 
-  const activeLabel =
-    channels.find((channel) => channel.id === accountId)?.displayName ??
-    "All accounts";
+  const activeLabel = selectedGroup(groups, accountId)?.label ?? "All accounts";
 
   return (
     <>
@@ -852,7 +913,7 @@ function ModerationPage({
           AI proposes. Policy decides. You can override. Viewing {activeLabel}.
         </p>
         <AccountSwitcher
-          channels={channels}
+          groups={groups}
           value={accountId}
           onChange={(next) => {
             setAccountId(next);
@@ -1021,16 +1082,15 @@ function InboxPage({
   const [accountId, setAccountId] = useState(() =>
     readStoredAccountId(organizationId),
   );
+  const groups = groupChannels(channels);
 
   useEffect(() => {
     void api
       .channels(organizationId)
       .then((data) => {
         setChannels(data.channels);
-        if (
-          accountId &&
-          !data.channels.some((channel) => channel.id === accountId)
-        ) {
+        const nextGroups = groupChannels(data.channels);
+        if (accountId && !selectedGroup(nextGroups, accountId)) {
           setAccountId("");
           storeAccountId(organizationId, "");
         }
@@ -1051,9 +1111,7 @@ function InboxPage({
       .catch((err: Error) => setError(err.message));
   }, [organizationId, accountId, setError]);
 
-  const activeLabel =
-    channels.find((channel) => channel.id === accountId)?.displayName ??
-    "All accounts";
+  const activeLabel = selectedGroup(groups, accountId)?.label ?? "All accounts";
 
   return (
     <>
@@ -1064,7 +1122,7 @@ function InboxPage({
           brand separate.
         </p>
         <AccountSwitcher
-          channels={channels}
+          groups={groups}
           value={accountId}
           onChange={(next) => {
             setAccountId(next);
