@@ -29,6 +29,10 @@ export function isInstagramDmAccessDisabled(message: string): boolean {
   );
 }
 
+export function isGraphPayloadTooLarge(message: string): boolean {
+  return /reduce the amount of data you're asking for/i.test(message);
+}
+
 export function mapGraphError(
   status: number,
   graphCode: number | undefined,

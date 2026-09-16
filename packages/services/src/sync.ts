@@ -1,6 +1,7 @@
 import {
   ChannelProviderError,
   type MetaPage,
+  isGraphPayloadTooLarge,
   isInstagramDmAccessDisabled,
   listInstagramMediaComments,
   listPageConversationMessages,
@@ -249,19 +250,22 @@ export async function syncMetaMessages(
         pageId,
         platform,
         selfIds,
-        maxConversations: 40,
-        messagesPerConversation: 25,
+        maxConversations: 20,
+        messagesPerConversation: 10,
       });
     } catch (error) {
       if (
         error instanceof ChannelProviderError &&
         (isInstagramDmAccessDisabled(error.message) ||
+          isGraphPayloadTooLarge(error.message) ||
           error.code === "forbidden")
       ) {
         warnings.push(
           isInstagramDmAccessDisabled(error.message)
             ? instagramDmAccessHelp(account.displayName)
-            : `${account.displayName}: Meta blocked messaging (${error.message})`,
+            : isGraphPayloadTooLarge(error.message)
+              ? `${account.displayName}: Meta rejected the DM sync payload as too large. Try Sync again.`
+              : `${account.displayName}: Meta blocked messaging (${error.message})`,
         );
         continue;
       }

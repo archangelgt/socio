@@ -728,28 +728,34 @@ type PageConversationsResponse = {
     participants?: {
       data?: Array<{ id?: string; name?: string; username?: string }>;
     };
-    messages?: {
-      data?: Array<{
-        id: string;
-        message?: string;
-        created_time?: string;
-        from?: {
-          id?: string;
-          name?: string;
-          username?: string;
-          email?: string;
-        };
-      }>;
+  }>;
+  paging?: { cursors?: { after?: string }; next?: string };
+};
+
+type ConversationMessagesResponse = {
+  data?: Array<{
+    id: string;
+    message?: string;
+    created_time?: string;
+    from?: {
+      id?: string;
+      name?: string;
+      username?: string;
+      email?: string;
     };
   }>;
   paging?: { cursors?: { after?: string }; next?: string };
 };
 
-const CONVERSATION_PAGE_SIZE = 25;
-const DEFAULT_MAX_CONVERSATIONS = 40;
+/** Keep conversation list pages small; nested message expansions trigger Graph payload limits. */
+const CONVERSATION_PAGE_SIZE = 10;
+const DEFAULT_MAX_CONVERSATIONS = 20;
+const DEFAULT_MESSAGES_PER_CONVERSATION = 10;
 
 /**
  * Pull recent Messenger / Instagram DM threads for a Facebook Page.
+ * Lists conversations lightly, then fetches messages per thread to avoid
+ * Graph "reduce the amount of data" errors from nested field expansions.
  * Contact id matches webhook identity (non-page participant PSID/IGSID).
  */
 export async function listPageConversationMessages(
@@ -769,7 +775,10 @@ export async function listPageConversationMessages(
   );
   const messagesPerConversation = Math.max(
     1,
-    Math.min(50, input.messagesPerConversation ?? 20),
+    Math.min(
+      25,
+      input.messagesPerConversation ?? DEFAULT_MESSAGES_PER_CONVERSATION,
+    ),
   );
   const selfIds = new Set(
     [input.pageId, ...(input.selfIds ?? [])].filter(Boolean),
@@ -789,7 +798,8 @@ export async function listPageConversationMessages(
       accessToken: input.accessToken,
       query: {
         platform: input.platform,
-        fields: `participants,updated_time,messages.limit(${messagesPerConversation}){id,message,from,created_time}`,
+        // Intentionally omit nested messages — fetch per thread below.
+        fields: "participants,updated_time",
         limit: String(pageLimit),
         after,
       },
@@ -802,6 +812,9 @@ export async function listPageConversationMessages(
 
     for (const thread of page) {
       fetched += 1;
+      if (!thread.id) {
+        continue;
+      }
       const participants = thread.participants?.data ?? [];
       const contact =
         participants.find((person) => person.id && !selfIds.has(person.id)) ??
@@ -812,7 +825,20 @@ export async function listPageConversationMessages(
       }
       const contactDisplayName = contact.username ?? contact.name;
 
-      for (const message of thread.messages?.data ?? []) {
+      const messagePage = await graphRequest<ConversationMessagesResponse>(
+        config,
+        {
+          method: "GET",
+          path: `/${thread.id}/messages`,
+          accessToken: input.accessToken,
+          query: {
+            fields: "id,message,from,created_time",
+            limit: String(messagesPerConversation),
+          },
+        },
+      );
+
+      for (const message of messagePage.data ?? []) {
         if (!message.id) {
           continue;
         }

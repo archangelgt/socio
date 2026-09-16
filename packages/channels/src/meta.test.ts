@@ -1,10 +1,11 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { ChannelProviderError } from "./errors";
+import { ChannelProviderError, isGraphPayloadTooLarge } from "./errors";
 import { MetaChannelAdapter } from "./meta";
 import {
   hideCandidateIds,
   listInstagramMediaComments,
+  listPageConversationMessages,
   matchInstagramComment,
   pickMediaThumbnail,
 } from "./meta-graph";
@@ -572,5 +573,84 @@ describe("MetaChannelAdapter", () => {
         externalCommentId: "c1",
       }),
     ).rejects.toBeInstanceOf(ChannelProviderError);
+  });
+});
+
+describe("listPageConversationMessages", () => {
+  it("lists conversations lightly then fetches messages per thread", async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const href = String(input);
+      if (href.includes("/messages")) {
+        return new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: "m1",
+                message: "hola",
+                created_time: "2026-09-16T12:00:00+0000",
+                from: { id: "user-1", username: "andy" },
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "t1",
+              participants: {
+                data: [
+                  { id: "page-1", name: "Page" },
+                  { id: "user-1", username: "andy" },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+
+    const messages = await listPageConversationMessages(
+      {
+        graphVersion: "v21.0",
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      },
+      {
+        accessToken: "page-token",
+        pageId: "page-1",
+        platform: "instagram",
+        maxConversations: 5,
+        messagesPerConversation: 5,
+      },
+    );
+
+    expect(messages).toEqual([
+      expect.objectContaining({
+        contactExternalId: "user-1",
+        contactDisplayName: "andy",
+        messageId: "m1",
+        body: "hola",
+        direction: "inbound",
+      }),
+    ]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const firstUrl = String(fetchImpl.mock.calls[0]?.[0]);
+    expect(firstUrl).toContain("/page-1/conversations");
+    expect(firstUrl).toContain("fields=participants%2Cupdated_time");
+    expect(firstUrl).not.toContain("messages.limit");
+    const secondUrl = String(fetchImpl.mock.calls[1]?.[0]);
+    expect(secondUrl).toContain("/t1/messages");
+  });
+
+  it("detects Graph payload-too-large errors", () => {
+    expect(
+      isGraphPayloadTooLarge(
+        "Please reduce the amount of data you're asking for, then retry your request",
+      ),
+    ).toBe(true);
+    expect(isGraphPayloadTooLarge("rate limit exceeded")).toBe(false);
   });
 });

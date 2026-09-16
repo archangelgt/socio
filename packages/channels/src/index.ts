@@ -2,6 +2,7 @@ export { MockChannelAdapter } from "./mock";
 export { MetaChannelAdapter, type MetaAdapterConfig } from "./meta";
 export {
   ChannelProviderError,
+  isGraphPayloadTooLarge,
   isInstagramDmAccessDisabled,
   type ProviderFailureCode,
 } from "./errors";
