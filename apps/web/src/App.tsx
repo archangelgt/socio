@@ -946,6 +946,44 @@ function ModerationPage({
     reload();
   }, [reload]);
 
+  useEffect(() => {
+    let cancelled = false;
+    let inFlight = false;
+    const sync = (showBusy: boolean) => {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
+      if (showBusy) {
+        setSyncing(true);
+      }
+      void api
+        .syncComments(organizationId)
+        .then(() => {
+          if (!cancelled) {
+            reload();
+          }
+        })
+        .catch((err: Error) => {
+          if (!cancelled && showBusy) {
+            setError(err.message);
+          }
+        })
+        .finally(() => {
+          inFlight = false;
+          if (!cancelled && showBusy) {
+            setSyncing(false);
+          }
+        });
+    };
+    sync(true);
+    const timer = window.setInterval(() => sync(false), 45_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [organizationId, reload, setError]);
+
   const activeLabel = selectedGroup(groups, accountId)?.label ?? "All accounts";
 
   return (
@@ -1323,8 +1361,13 @@ function ChannelsPage({
         <h1>Channels</h1>
         <p className="muted">
           Connect Meta (Instagram + Facebook) or use the local mock. Tokens
-          never leave the API. Instagram comment webhooks often skip your own
-          comments and Development-mode apps; use Sync Instagram comments.
+          never leave the API.
+        </p>
+        <p className="muted">
+          Real-time Instagram comment webhooks need the Meta app in{" "}
+          <strong>Live</strong> mode and <strong>Advanced Access</strong> for
+          comments. In Development, Meta only pushes comments from app roles —
+          Socio still catches everyone via Sync / background poll.
         </p>
       </header>
       {channels.length > 0 ? (

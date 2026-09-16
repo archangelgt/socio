@@ -128,6 +128,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      META_COMMENT_POLL_MS: ${META_COMMENT_POLL_MS:-30000}
     depends_on:
       postgres:
         condition: service_healthy

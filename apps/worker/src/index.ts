@@ -14,7 +14,7 @@ import {
 const redisUrl = process.env.REDIS_URL;
 const databaseUrl = process.env.DATABASE_URL;
 const tokenKey = process.env.TOKEN_ENCRYPTION_KEY ?? "dev-token-key-change-me";
-const pollMs = Number(process.env.META_COMMENT_POLL_MS ?? 120_000);
+const pollMs = Number(process.env.META_COMMENT_POLL_MS ?? 30_000);
 
 const meta: MetaConfig | undefined = (() => {
   const appId = process.env.META_APP_ID ?? "";
@@ -76,9 +76,7 @@ if (!databaseUrl || !meta) {
     running = true;
     try {
       const result = await syncAllInstagramComments(ctx);
-      if (result.ingested > 0) {
-        console.info("[worker] Instagram comment poller ingested", result);
-      }
+      console.info("[worker] Instagram comment poller", result);
     } catch (error) {
       console.error(
         "[worker] Instagram comment poller failed",
