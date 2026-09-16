@@ -9,24 +9,43 @@ import {
   socialAccounts,
   usageEvents,
 } from "@social-ai/db";
-import {
-  type ModerationAction,
-  type ModerationCategory,
-  type ModerationRule,
-  QUEUE_STATES,
-  type QueueState,
+import type {
+  ModerationAction,
+  ModerationCategory,
+  ModerationRule,
 } from "@social-ai/domain";
 import {
   evaluateModerationPolicy,
   parseModerationResult,
 } from "@social-ai/moderation";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { InboxListFilters } from "./account-filter";
 import { resolveInboxAccountIds } from "./account-filter";
 import { getChannelAdapter } from "./adapters";
 import { writeAudit } from "./audit";
 import type { ServiceContext } from "./context";
 import { AppError } from "./errors";
+import {
+  type ModerationQueueQuery,
+  escapeLikePattern,
+  resolveQueueOrder,
+  resolveQueuePage,
+  resolveQueuePageSize,
+  resolveQueueSeverity,
+  resolveQueueSort,
+  resolveQueueStatuses,
+} from "./moderation-queue-query";
 import { enqueueOutboundAction } from "./outbound";
 import { thumbnailFromMetadata } from "./posts";
 
@@ -283,9 +302,25 @@ export async function processModeration(
 export async function listModerationQueue(
   db: Database,
   organizationId: string,
-  options: { status?: string } & InboxListFilters = {},
+  options: ModerationQueueQuery & InboxListFilters = {},
 ) {
-  const { status, socialAccountId, brandId } = options;
+  const {
+    status,
+    severity,
+    q,
+    sort,
+    order,
+    page: pageInput,
+    pageSize: pageSizeInput,
+    socialAccountId,
+    brandId,
+  } = options;
+  const page = resolveQueuePage(pageInput);
+  const pageSize = resolveQueuePageSize(pageSizeInput);
+  const statuses = resolveQueueStatuses(status);
+  const severityFilter = resolveQueueSeverity(severity);
+  const sortField = resolveQueueSort(sort);
+  const sortOrder = resolveQueueOrder(order);
   const accountIds = await resolveInboxAccountIds(db, organizationId, {
     socialAccountId,
     brandId,
@@ -345,8 +380,11 @@ export async function listModerationQueue(
     eq(moderationDecisions.organizationId, organizationId),
     eq(comments.organizationId, organizationId),
   ];
-  if (status && (QUEUE_STATES as readonly string[]).includes(status)) {
-    filters.push(eq(comments.moderationStatus, status as QueueState));
+  if (statuses && statuses.length > 0) {
+    filters.push(inArray(comments.moderationStatus, statuses));
+  }
+  if (severityFilter) {
+    filters.push(eq(comments.severity, severityFilter));
   }
   if (accountIds && accountIds.length > 0) {
     filters.push(inArray(comments.socialAccountId, accountIds));
@@ -354,8 +392,45 @@ export async function listModerationQueue(
   if (brandId) {
     filters.push(eq(comments.brandId, brandId));
   }
+  const queryText = q?.trim();
+  if (queryText) {
+    const pattern = `%${escapeLikePattern(queryText)}%`;
+    const searchClause = or(
+      ilike(comments.body, pattern),
+      ilike(comments.authorDisplayName, pattern),
+      ilike(socialAccounts.displayName, pattern),
+      ilike(brands.name, pattern),
+    );
+    if (searchClause) {
+      filters.push(searchClause);
+    }
+  }
 
-  const rows = await db
+  const severityOrder = sql`case ${comments.severity}
+    when 'NONE' then 0
+    when 'LOW' then 1
+    when 'MEDIUM' then 2
+    when 'HIGH' then 3
+    when 'CRITICAL' then 4
+    else -1 end`;
+
+  const orderExpr = (() => {
+    const direction = sortOrder === "asc" ? asc : desc;
+    switch (sortField) {
+      case "severity":
+        return direction(severityOrder);
+      case "confidence":
+        return direction(comments.aiConfidence);
+      case "status":
+        return direction(comments.moderationStatus);
+      case "author":
+        return direction(comments.authorDisplayName);
+      default:
+        return direction(comments.createdAt);
+    }
+  })();
+
+  const baseQuery = db
     .select({
       decisionId: moderationDecisions.id,
       commentId: comments.id,
@@ -384,33 +459,54 @@ export async function listModerationQueue(
     .leftJoin(posts, eq(posts.id, comments.postId))
     .innerJoin(socialAccounts, eq(socialAccounts.id, comments.socialAccountId))
     .innerJoin(brands, eq(brands.id, comments.brandId))
-    .where(and(...filters))
-    .orderBy(desc(moderationDecisions.createdAt))
-    .limit(100);
+    .where(and(...filters));
 
-  return rows.map((row) => ({
-    decisionId: row.decisionId,
-    commentId: row.commentId,
-    body: row.body,
-    authorDisplayName: row.authorDisplayName,
-    commentStatus: row.commentStatus,
-    moderationStatus: row.moderationStatus,
-    severity: row.severity,
-    confidence: row.confidence,
-    recommendedAction: row.recommendedAction,
-    finalAction: row.finalAction,
-    rationale: row.rationale,
-    createdAt: row.createdAt,
-    postId: row.postId,
-    postBody: row.postBody,
-    postPermalink: row.postPermalink,
-    postThumbnailUrl: thumbnailFromMetadata(row.postMetadata),
-    socialAccountId: row.socialAccountId,
-    brandId: row.brandId,
-    accountDisplayName: row.accountDisplayName,
-    provider: row.provider,
-    brandName: row.brandName,
-  }));
+  const [totalRow] = await db
+    .select({ total: count() })
+    .from(moderationDecisions)
+    .innerJoin(comments, eq(comments.id, moderationDecisions.commentId))
+    .innerJoin(socialAccounts, eq(socialAccounts.id, comments.socialAccountId))
+    .innerJoin(brands, eq(brands.id, comments.brandId))
+    .where(and(...filters));
+
+  const total = Number(totalRow?.total ?? 0);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+
+  const rows = await baseQuery
+    .orderBy(orderExpr, desc(moderationDecisions.id))
+    .limit(pageSize)
+    .offset((safePage - 1) * pageSize);
+
+  return {
+    items: rows.map((row) => ({
+      decisionId: row.decisionId,
+      commentId: row.commentId,
+      body: row.body,
+      authorDisplayName: row.authorDisplayName,
+      commentStatus: row.commentStatus,
+      moderationStatus: row.moderationStatus,
+      severity: row.severity,
+      confidence: row.confidence,
+      recommendedAction: row.recommendedAction,
+      finalAction: row.finalAction,
+      rationale: row.rationale,
+      createdAt: row.createdAt,
+      postId: row.postId,
+      postBody: row.postBody,
+      postPermalink: row.postPermalink,
+      postThumbnailUrl: thumbnailFromMetadata(row.postMetadata),
+      socialAccountId: row.socialAccountId,
+      brandId: row.brandId,
+      accountDisplayName: row.accountDisplayName,
+      provider: row.provider,
+      brandName: row.brandName,
+    })),
+    page: safePage,
+    pageSize,
+    total,
+    totalPages,
+  };
 }
 
 export async function humanModerate(

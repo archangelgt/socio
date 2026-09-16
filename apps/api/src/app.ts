@@ -514,18 +514,28 @@ export async function buildApp(options: AppOptions) {
     const query = z
       .object({
         status: z.string().optional(),
+        severity: z.string().optional(),
+        q: z.string().max(200).optional(),
+        sort: z.string().optional(),
+        order: z.enum(["asc", "desc"]).optional(),
+        page: z.coerce.number().int().positive().optional(),
+        pageSize: z.coerce.number().int().positive().max(100).optional(),
         socialAccountId: z.string().uuid().optional(),
         brandId: z.string().uuid().optional(),
       })
       .parse(request.query);
     await hydrateMissingPostMedia(ctx, membership.organizationId);
-    return {
-      items: await listModerationQueue(ctx.db, membership.organizationId, {
-        status: query.status,
-        socialAccountId: query.socialAccountId,
-        brandId: query.brandId,
-      }),
-    };
+    return listModerationQueue(ctx.db, membership.organizationId, {
+      status: query.status,
+      severity: query.severity,
+      q: query.q,
+      sort: query.sort,
+      order: query.order,
+      page: query.page,
+      pageSize: query.pageSize,
+      socialAccountId: query.socialAccountId,
+      brandId: query.brandId,
+    });
   });
 
   app.post("/api/v1/moderation/decisions/:id/allow", async (request) => {

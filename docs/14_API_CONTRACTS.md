@@ -84,7 +84,14 @@ Query filters for inbox lists (`GET /api/v1/comments`, `GET /api/v1/conversation
 
 - `socialAccountId` (uuid, optional) — scope to one connected social account
 - `brandId` (uuid, optional) — scope to one brand
-- `status` (moderation queue only)
+- `status` (moderation queue only) — queue state (`REVIEW_REQUIRED`, …) or bucket (`review`, `hidden`, `allowed`, `failed`)
+- `severity` (moderation queue only) — `NONE` | `LOW` | `MEDIUM` | `HIGH` | `CRITICAL`
+- `q` (moderation queue only) — search comment body, author, account, or brand
+- `sort` (moderation queue only) — `createdAt` | `severity` | `confidence` | `status` | `author`
+- `order` (moderation queue only) — `asc` | `desc` (default `desc`)
+- `page`, `pageSize` (moderation queue only) — 1-based pagination (`pageSize` max 100, default 25)
+
+`GET /api/v1/moderation/queue` returns `{ items, page, pageSize, total, totalPages }`.
 
 List items include `socialAccountId`, `accountDisplayName`, `provider`, `brandId`, and `brandName`.
 

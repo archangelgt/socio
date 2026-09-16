@@ -898,6 +898,32 @@ function AuthScreen({
   );
 }
 
+type QueueSortField =
+  | "createdAt"
+  | "severity"
+  | "confidence"
+  | "status"
+  | "author";
+
+type QueueStatusFilter = "" | "review" | "hidden" | "allowed" | "failed";
+
+const STATUS_FILTERS: { id: QueueStatusFilter; label: string }[] = [
+  { id: "", label: "All" },
+  { id: "review", label: "Needs review" },
+  { id: "hidden", label: "Hidden" },
+  { id: "allowed", label: "Allowed" },
+  { id: "failed", label: "Failed" },
+];
+
+const SEVERITY_FILTERS = [
+  "",
+  "NONE",
+  "LOW",
+  "MEDIUM",
+  "HIGH",
+  "CRITICAL",
+] as const;
+
 function ModerationPage({
   organizationId,
   setError,
@@ -912,6 +938,16 @@ function ModerationPage({
   const [accountId, setAccountId] = useState(() =>
     readStoredAccountId(organizationId),
   );
+  const [statusFilter, setStatusFilter] = useState<QueueStatusFilter>("");
+  const [severityFilter, setSeverityFilter] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<QueueSortField>("createdAt");
+  const [order, setOrder] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(25);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [syncing, setSyncing] = useState(false);
   const [replyFor, setReplyFor] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
@@ -919,14 +955,47 @@ function ModerationPage({
   const [suggestBusy, setSuggestBusy] = useState(false);
   const groups = groupChannels(channels);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
   const reload = useCallback(() => {
     void api
       .queue(organizationId, {
         socialAccountId: accountId || undefined,
+        status: statusFilter || undefined,
+        severity: severityFilter || undefined,
+        q: search || undefined,
+        sort,
+        order,
+        page,
+        pageSize,
       })
-      .then((data) => setItems(data.items))
+      .then((data) => {
+        setItems(data.items);
+        setTotal(data.total);
+        setTotalPages(data.totalPages);
+        if (data.page !== page) {
+          setPage(data.page);
+        }
+      })
       .catch((err: Error) => setError(err.message));
-  }, [organizationId, accountId, setError]);
+  }, [
+    organizationId,
+    accountId,
+    statusFilter,
+    severityFilter,
+    search,
+    sort,
+    order,
+    page,
+    pageSize,
+    setError,
+  ]);
 
   useEffect(() => {
     void api
@@ -986,6 +1055,26 @@ function ModerationPage({
 
   const activeLabel = selectedGroup(groups, accountId)?.label ?? "All accounts";
 
+  const toggleSort = (field: QueueSortField) => {
+    if (sort === field) {
+      setOrder((current) => (current === "asc" ? "desc" : "asc"));
+    } else {
+      setSort(field);
+      setOrder(field === "createdAt" ? "desc" : "asc");
+    }
+    setPage(1);
+  };
+
+  const sortLabel = (field: QueueSortField, label: string) => {
+    if (sort !== field) {
+      return label;
+    }
+    return `${label} ${order === "asc" ? "↑" : "↓"}`;
+  };
+
+  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, total);
+
   return (
     <>
       <header>
@@ -999,47 +1088,131 @@ function ModerationPage({
           onChange={(next) => {
             setAccountId(next);
             storeAccountId(organizationId, next);
+            setPage(1);
             setReplyFor(null);
             setReplyText("");
           }}
         />
-        <div className="button-row">
-          <button
-            type="button"
-            disabled={syncing}
-            onClick={() => {
-              setSyncing(true);
-              void api
-                .syncComments(organizationId)
-                .then(reload)
-                .catch((err: Error) => setError(err.message))
-                .finally(() => setSyncing(false));
-            }}
-          >
-            {syncing ? "Syncing Instagram…" : "Sync Instagram comments"}
-          </button>
+        <div className="moderation-toolbar">
+          <div className="status-filter" role="tablist" aria-label="Status">
+            {STATUS_FILTERS.map((item) => (
+              <button
+                key={item.id || "all"}
+                type="button"
+                role="tab"
+                aria-selected={statusFilter === item.id}
+                className={statusFilter === item.id ? "active" : undefined}
+                onClick={() => {
+                  setStatusFilter(item.id);
+                  setPage(1);
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="button-row">
+            <button
+              type="button"
+              disabled={syncing}
+              onClick={() => {
+                setSyncing(true);
+                void api
+                  .syncComments(organizationId)
+                  .then(reload)
+                  .catch((err: Error) => setError(err.message))
+                  .finally(() => setSyncing(false));
+              }}
+            >
+              {syncing ? "Syncing Instagram…" : "Sync Instagram comments"}
+            </button>
+          </div>
+        </div>
+        <div className="moderation-controls">
+          <label className="moderation-search">
+            <span className="sr-only">Search comments</span>
+            <input
+              type="search"
+              value={searchInput}
+              placeholder="Search comment, author, account…"
+              onChange={(event) => setSearchInput(event.target.value)}
+            />
+          </label>
+          <label className="moderation-select">
+            <span className="sr-only">Severity</span>
+            <select
+              value={severityFilter}
+              onChange={(event) => {
+                setSeverityFilter(event.target.value);
+                setPage(1);
+              }}
+            >
+              {SEVERITY_FILTERS.map((value) => (
+                <option key={value || "any"} value={value}>
+                  {value ? `Severity: ${value}` : "Any severity"}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       </header>
       {items.length === 0 ? (
         <div className="panel empty">
           <img src="/brand/icon.png" alt="" />
-          <p>Nothing to hide… yet.</p>
+          <p>
+            {total === 0 && (search || statusFilter || severityFilter)
+              ? "No comments match these filters."
+              : "Nothing to hide… yet."}
+          </p>
           <p className="muted">
-            Connect a channel and sync comments. Socio will queue what needs a
-            human.
+            {total === 0 && (search || statusFilter || severityFilter)
+              ? "Clear search or filters to see the full queue."
+              : "Connect a channel and sync comments. Socio will queue what needs a human."}
           </p>
         </div>
       ) : (
         <div className="panel">
-          <table>
+          <table className="moderation-table">
             <thead>
               <tr>
                 <th>Comment</th>
                 <th>Account</th>
-                <th>When</th>
-                <th>Status</th>
-                <th>Severity</th>
-                <th>Confidence</th>
+                <th>
+                  <button
+                    type="button"
+                    className="th-sort"
+                    onClick={() => toggleSort("createdAt")}
+                  >
+                    {sortLabel("createdAt", "When")}
+                  </button>
+                </th>
+                <th>
+                  <button
+                    type="button"
+                    className="th-sort"
+                    onClick={() => toggleSort("status")}
+                  >
+                    {sortLabel("status", "Status")}
+                  </button>
+                </th>
+                <th>
+                  <button
+                    type="button"
+                    className="th-sort"
+                    onClick={() => toggleSort("severity")}
+                  >
+                    {sortLabel("severity", "Severity")}
+                  </button>
+                </th>
+                <th>
+                  <button
+                    type="button"
+                    className="th-sort"
+                    onClick={() => toggleSort("confidence")}
+                  >
+                    {sortLabel("confidence", "Confidence")}
+                  </button>
+                </th>
                 <th />
               </tr>
             </thead>
@@ -1170,6 +1343,32 @@ function ModerationPage({
               })}
             </tbody>
           </table>
+          <div className="table-footer">
+            <p className="muted">
+              Showing {rangeStart}–{rangeEnd} of {total}
+            </p>
+            <div className="pager">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                Previous
+              </button>
+              <span className="muted">
+                Page {page} / {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={page >= totalPages}
+                onClick={() =>
+                  setPage((current) => Math.min(totalPages, current + 1))
+                }
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

@@ -847,7 +847,7 @@ tr.is-replying td {
   gap: 0.75rem;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.5rem;
+  margin: 0.85rem 0 0.65rem;
 }
 
 .moderation-toolbar .button-row {
@@ -857,6 +857,124 @@ tr.is-replying td {
 .moderation-toolbar .button-row button {
   padding: 0.55rem 1rem;
   font-size: 0.86rem;
+}
+
+.status-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.status-filter button {
+  border: 1px solid #d7dee8;
+  background: var(--white);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.38rem 0.8rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.status-filter button.active {
+  background: var(--ink, #0b0f2a);
+  border-color: var(--ink, #0b0f2a);
+  color: var(--white);
+}
+
+.moderation-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+  margin: 0.35rem 0 0.85rem;
+}
+
+.moderation-search {
+  flex: 1 1 16rem;
+  min-width: 12rem;
+}
+
+.moderation-search input,
+.moderation-select select {
+  width: 100%;
+  border: 1px solid #d7dee8;
+  border-radius: 12px;
+  background: var(--white);
+  color: var(--text);
+  padding: 0.55rem 0.8rem;
+  font: inherit;
+}
+
+.moderation-select {
+  flex: 0 0 11rem;
+}
+
+.th-sort {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.th-sort:hover {
+  color: var(--text);
+}
+
+.table-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  border-top: 1px solid #eef2f7;
+  background: #fbfcfe;
+}
+
+.table-footer .muted {
+  margin: 0;
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.pager button {
+  margin: 0;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.82rem;
+  border: 1px solid #d7dee8;
+  background: var(--white);
+  color: var(--text);
+  box-shadow: none;
+}
+
+.pager button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .panel table {

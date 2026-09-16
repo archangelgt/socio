@@ -47,6 +47,13 @@ export {
   listModerationQueue,
   processModeration,
 } from "./moderate";
+export {
+  QUEUE_SORT_FIELDS,
+  QUEUE_STATUS_BUCKETS,
+  type ModerationQueueQuery,
+  type QueueSortField,
+  type QueueStatusBucket,
+} from "./moderation-queue-query";
 export { processOutboundAction } from "./outbound";
 export { suggestCommentReply } from "./suggest-reply";
 export {

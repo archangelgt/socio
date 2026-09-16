@@ -197,11 +197,39 @@ export const api = {
   },
   queue: (
     organizationId: string,
-    filters?: { status?: string; socialAccountId?: string; brandId?: string },
+    filters?: {
+      status?: string;
+      severity?: string;
+      q?: string;
+      sort?: string;
+      order?: "asc" | "desc";
+      page?: number;
+      pageSize?: number;
+      socialAccountId?: string;
+      brandId?: string;
+    },
   ) => {
     const params = new URLSearchParams();
     if (filters?.status) {
       params.set("status", filters.status);
+    }
+    if (filters?.severity) {
+      params.set("severity", filters.severity);
+    }
+    if (filters?.q) {
+      params.set("q", filters.q);
+    }
+    if (filters?.sort) {
+      params.set("sort", filters.sort);
+    }
+    if (filters?.order) {
+      params.set("order", filters.order);
+    }
+    if (filters?.page) {
+      params.set("page", String(filters.page));
+    }
+    if (filters?.pageSize) {
+      params.set("pageSize", String(filters.pageSize));
     }
     if (filters?.socialAccountId) {
       params.set("socialAccountId", filters.socialAccountId);
@@ -232,6 +260,10 @@ export const api = {
         provider: string;
         brandName: string | null;
       }[];
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
     }>(`/api/v1/moderation/queue${query ? `?${query}` : ""}`, {
       organizationId,
     });
