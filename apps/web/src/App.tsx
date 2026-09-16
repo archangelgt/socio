@@ -1634,9 +1634,11 @@ function InboxPage({
           <img src="/brand/icon.png" alt="" />
           <p>No direct messages yet.</p>
           <p className="muted">
-            Hit Sync messages to pull Instagram and Facebook DMs from Meta. If
-            Meta returns “disabled access to Instagram direct messages”, enable
-            Connected tools → Allow access to messages on that IG account.
+            Hit Sync messages to pull Instagram and Facebook DMs from Meta.
+            Instagram customer DMs need Advanced Access for
+            instagram_manage_messages (or the sender must be a Meta App Tester).
+            Also enable Connected tools → Allow access to messages on the IG
+            account.
           </p>
         </div>
       ) : (

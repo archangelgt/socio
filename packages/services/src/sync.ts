@@ -194,7 +194,11 @@ function instagramDmAccessHelp(accountLabel: string): string {
 }
 
 function instagramAdvancedAccessHelp(accountLabel: string): string {
-  return `${accountLabel}: Meta needs Advanced Access for instagram_manage_messages to list existing Instagram DMs (too many threads outside app roles). New DMs still arrive via webhook; request Advanced Access in Meta App Review, or use Messenger sync on the linked Page.`;
+  return `${accountLabel}: Meta needs Advanced Access for instagram_manage_messages before Socio can see Instagram DMs from people who are not testers on your Meta app (e.g. Andy Morales’ “hey”). Until then Graph returns an empty inbox and webhooks will not deliver those threads. Request Advanced Access in Meta App Review, or temporarily add that person as an App Tester and ask them to message again.`;
+}
+
+function instagramEmptySyncHelp(accountLabel: string): string {
+  return `${accountLabel}: Meta returned 0 Instagram conversations. Customer DMs (like a new “hey”) stay invisible until instagram_manage_messages has Advanced Access, or the sender is an App Tester/Admin. Also confirm Instagram → Connected tools → Allow access to messages is ON.`;
 }
 
 function resolvePageAccessToken(
@@ -324,6 +328,9 @@ export async function syncMetaMessages(
     }
 
     seen += messages.length;
+    if (account.provider === "instagram" && messages.length === 0) {
+      warnings.push(instagramEmptySyncHelp(account.displayName));
+    }
     const prefix = account.provider === "instagram" ? "ig" : "fb";
 
     for (const message of messages) {
