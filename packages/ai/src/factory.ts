@@ -1,3 +1,4 @@
+import { AnthropicProvider } from "./anthropic";
 import { AIProviderError } from "./errors";
 import { MockAIProvider } from "./mock";
 import { OpenAICompatibleProvider } from "./openai";
@@ -20,6 +21,20 @@ export function createAIProvider(
       apiKey,
       model: env.OPENAI_MODEL,
       baseUrl: env.OPENAI_BASE_URL,
+      fetchImpl,
+    });
+  }
+  if (name === "anthropic") {
+    const apiKey = env.ANTHROPIC_API_KEY?.trim();
+    if (!apiKey) {
+      throw new AIProviderError(
+        "Set ANTHROPIC_API_KEY when AI_PROVIDER=anthropic.",
+      );
+    }
+    return new AnthropicProvider({
+      apiKey,
+      model: env.ANTHROPIC_MODEL,
+      baseUrl: env.ANTHROPIC_BASE_URL,
       fetchImpl,
     });
   }

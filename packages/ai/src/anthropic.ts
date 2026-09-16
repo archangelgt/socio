@@ -1,4 +1,7 @@
-import { type ModerationResult, TAXONOMY_VERSION } from "@social-ai/domain";
+import {
+  type ModerationResult,
+  TAXONOMY_VERSION,
+} from "@social-ai/domain";
 import { AIProviderError } from "./errors";
 import {
   buildModerationUserPrompt,
@@ -16,30 +19,35 @@ import type {
   ModerationRequest,
 } from "./types";
 
-const DEFAULT_BASE_URL = "https://api.openai.com/v1";
-const DEFAULT_MODEL = "gpt-4o-mini";
+const DEFAULT_BASE_URL = "https://api.anthropic.com";
+const DEFAULT_MODEL = "claude-haiku-4-5";
+const ANTHROPIC_VERSION = "2023-06-01";
 
-export type OpenAICompatibleConfig = {
+export type AnthropicConfig = {
   apiKey: string;
   model?: string;
   baseUrl?: string;
   fetchImpl?: typeof fetch;
 };
 
-type ChatCompletionResponse = {
-  choices?: Array<{
-    message?: { content?: string | null; refusal?: string | null };
-  }>;
+type AnthropicContentBlock = {
+  type?: string;
+  text?: string;
 };
 
-export class OpenAICompatibleProvider implements AIProvider {
-  readonly provider = "openai";
+type AnthropicMessagesResponse = {
+  content?: AnthropicContentBlock[];
+  error?: { message?: string; type?: string };
+};
+
+export class AnthropicProvider implements AIProvider {
+  readonly provider = "anthropic";
   readonly model: string;
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
 
-  constructor(config: OpenAICompatibleConfig) {
+  constructor(config: AnthropicConfig) {
     this.apiKey = config.apiKey;
     this.model = config.model?.trim() || DEFAULT_MODEL;
     this.baseUrl = (config.baseUrl?.trim() || DEFAULT_BASE_URL).replace(
@@ -64,60 +72,63 @@ export class OpenAICompatibleProvider implements AIProvider {
   }
 
   async moderate(input: ModerationRequest): Promise<ModerationResult> {
-    const response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
+    const response = await this.fetchImpl(`${this.baseUrl}/v1/messages`, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${this.apiKey}`,
+        "x-api-key": this.apiKey,
+        "anthropic-version": ANTHROPIC_VERSION,
         "content-type": "application/json",
       },
       body: JSON.stringify({
         model: this.model,
+        max_tokens: 1024,
         temperature: 0,
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "moderation_result",
-            strict: true,
+        system: MODERATION_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: buildModerationUserPrompt(input),
+          },
+        ],
+        output_config: {
+          format: {
+            type: "json_schema",
             schema: MODERATION_RESULT_SCHEMA,
           },
         },
-        messages: [
-          { role: "system", content: MODERATION_SYSTEM_PROMPT },
-          { role: "user", content: buildModerationUserPrompt(input) },
-        ],
       }),
       signal: AbortSignal.timeout(20_000),
     });
 
-    const body = (await response.json()) as ChatCompletionResponse & {
-      error?: { message?: string };
-    };
+    const body = (await response.json()) as AnthropicMessagesResponse;
     if (!response.ok) {
       throw new AIProviderError(
         body.error?.message
-          ? `OpenAI HTTP ${response.status}: ${body.error.message}`
-          : `OpenAI HTTP ${response.status}`,
+          ? `Anthropic HTTP ${response.status}: ${body.error.message}`
+          : `Anthropic HTTP ${response.status}`,
         response.status,
       );
     }
 
-    const message = body.choices?.[0]?.message;
-    const content = message?.content;
-    if (!content) {
-      throw new AIProviderError(
-        message?.refusal || "OpenAI returned an empty moderation result.",
-      );
+    const text = body.content
+      ?.filter((block) => block.type === "text" && typeof block.text === "string")
+      .map((block) => block.text)
+      .join("")
+      .trim();
+
+    if (!text) {
+      throw new AIProviderError("Anthropic returned an empty moderation result.");
     }
 
     let parsed: unknown;
     try {
-      parsed = JSON.parse(content) as unknown;
+      parsed = JSON.parse(text) as unknown;
     } catch {
-      throw new AIProviderError("OpenAI returned invalid JSON.");
+      throw new AIProviderError("Anthropic returned invalid JSON.");
     }
 
     if (!parsed || typeof parsed !== "object") {
-      throw new AIProviderError("OpenAI returned a non-object result.");
+      throw new AIProviderError("Anthropic returned a non-object result.");
     }
 
     return {
