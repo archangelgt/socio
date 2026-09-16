@@ -177,3 +177,15 @@ Decision: Moderators may enable **Modo automático** per social account (`social
 
 Reason: operators asked for automatic public replies on selected accounts. The toggle is prior human authorization; ADR-005 still holds because posting goes through the outbound bus + account capability checks, not the model.
 
+## ADR-027 — Hide-first on uncertain abuse
+
+Decision: Default moderation is **stricter**. Matching hide rules use severity floors as low as `LOW` / `MEDIUM` and confidence ≥ 0.65. When the model signals abuse (non-normal categories, `HIDE`/`FLAG`, or a matching hide rule) with confidence ≥ 0.50, Socio **auto-hides** (`uncertain_hide_first` / `abuse_signal_hide_first`) instead of leaving the comment visible under `REVIEW_REQUIRED`. Humans can restore. Soft criticism without insulting profanity remains allowlisted.
+
+Reason: operators rejected low-confidence insults (e.g. “No usen AI mierda”) remaining public while queued for review. ADR-006’s human-review default still applies to self-harm escalate paths and capability failures; false positives are reversible via unhide.
+
+## ADR-028 — Inbox DM reply + AI draft
+
+Decision: Inbox supports human DM replies (`POST /conversations/:id/messages`) and draft AI suggestions (`POST /conversations/:id/suggest-reply`), plus the same newest-first search/filter/pagination pattern as the moderation queue for comments and conversations.
+
+Reason: unified inbox operators need to answer private messages with the same assist pattern as public comment replies (ADR-025).
+

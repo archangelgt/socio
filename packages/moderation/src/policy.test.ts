@@ -1,7 +1,11 @@
 import { TAXONOMY_VERSION } from "@social-ai/domain";
 import type { ModerationResult } from "@social-ai/domain";
 import { describe, expect, it } from "vitest";
-import { defaultModerationRules, evaluateModerationPolicy } from "./policy";
+import {
+  DEFAULT_POLICY_CONFIDENCE_THRESHOLD,
+  defaultModerationRules,
+  evaluateModerationPolicy,
+} from "./policy";
 
 const hideCapable = {
   hideComments: true,
@@ -35,7 +39,7 @@ describe("evaluateModerationPolicy", () => {
         recommended_action: "HIDE",
       }),
       rules,
-      policyConfidenceThreshold: 0.9,
+      policyConfidenceThreshold: DEFAULT_POLICY_CONFIDENCE_THRESHOLD,
       capabilities: hideCapable,
     });
 
@@ -45,7 +49,7 @@ describe("evaluateModerationPolicy", () => {
     });
   });
 
-  it("sends medium-confidence hate speech to review", () => {
+  it("hide-first on medium-confidence hate speech", () => {
     const decision = evaluateModerationPolicy({
       result: result({
         categories: [{ name: "hate_speech", confidence: 0.74 }],
@@ -54,12 +58,35 @@ describe("evaluateModerationPolicy", () => {
         recommended_action: "HIDE",
       }),
       rules,
-      policyConfidenceThreshold: 0.9,
+      policyConfidenceThreshold: DEFAULT_POLICY_CONFIDENCE_THRESHOLD,
       capabilities: hideCapable,
     });
+    expect(decision).toMatchObject({
+      queueState: "AUTO_HIDDEN",
+      action: "HIDE",
+      reason: "policy_auto_hide",
+    });
+  });
 
-    expect(decision.queueState).toBe("REVIEW_REQUIRED");
-    expect(decision.reason).toBe("medium_confidence");
+  it("hide-first on low-confidence severe profanity (estradioi case)", () => {
+    const decision = evaluateModerationPolicy({
+      result: result({
+        categories: [
+          { name: "severe_profanity", confidence: 0.7 },
+          { name: "complaint", confidence: 0.6 },
+        ],
+        severity: "LOW",
+        overall_confidence: 0.65,
+        recommended_action: "FLAG",
+      }),
+      rules,
+      policyConfidenceThreshold: DEFAULT_POLICY_CONFIDENCE_THRESHOLD,
+      capabilities: hideCapable,
+    });
+    expect(decision).toMatchObject({
+      queueState: "AUTO_HIDDEN",
+      action: "HIDE",
+    });
   });
 
   it("auto-hides high-confidence spam", () => {
@@ -71,7 +98,7 @@ describe("evaluateModerationPolicy", () => {
         recommended_action: "HIDE",
       }),
       rules,
-      policyConfidenceThreshold: 0.9,
+      policyConfidenceThreshold: DEFAULT_POLICY_CONFIDENCE_THRESHOLD,
       capabilities: hideCapable,
     });
 
@@ -87,7 +114,7 @@ describe("evaluateModerationPolicy", () => {
         recommended_action: "ALLOW",
       }),
       rules,
-      policyConfidenceThreshold: 0.9,
+      policyConfidenceThreshold: DEFAULT_POLICY_CONFIDENCE_THRESHOLD,
       capabilities: hideCapable,
     });
 
@@ -106,23 +133,23 @@ describe("evaluateModerationPolicy", () => {
         recommended_action: "ALLOW",
       }),
       rules,
-      policyConfidenceThreshold: 0.9,
+      policyConfidenceThreshold: DEFAULT_POLICY_CONFIDENCE_THRESHOLD,
       capabilities: hideCapable,
     });
 
     expect(decision.queueState).toBe("AUTO_ALLOWED");
   });
 
-  it("reviews low-confidence unknown output", () => {
+  it("reviews very-low-confidence safe-looking output", () => {
     const decision = evaluateModerationPolicy({
       result: result({
-        categories: [{ name: "other", confidence: 0.52 }],
-        severity: "LOW",
-        overall_confidence: 0.52,
+        categories: [{ name: "other", confidence: 0.4 }],
+        severity: "NONE",
+        overall_confidence: 0.4,
         recommended_action: "ALLOW",
       }),
       rules,
-      policyConfidenceThreshold: 0.9,
+      policyConfidenceThreshold: DEFAULT_POLICY_CONFIDENCE_THRESHOLD,
       capabilities: hideCapable,
     });
 
@@ -130,7 +157,7 @@ describe("evaluateModerationPolicy", () => {
     expect(decision.reason).toBe("low_confidence");
   });
 
-  it("reviews threats even at high confidence", () => {
+  it("hide-first for threats then marks human review path", () => {
     const decision = evaluateModerationPolicy({
       result: result({
         categories: [{ name: "threat", confidence: 0.99 }],
@@ -139,15 +166,18 @@ describe("evaluateModerationPolicy", () => {
         recommended_action: "HIDE",
       }),
       rules,
-      policyConfidenceThreshold: 0.9,
+      policyConfidenceThreshold: DEFAULT_POLICY_CONFIDENCE_THRESHOLD,
       capabilities: hideCapable,
     });
 
-    expect(decision.queueState).toBe("REVIEW_REQUIRED");
-    expect(decision.reason).toBe("rule_requires_human");
+    expect(decision).toMatchObject({
+      queueState: "AUTO_HIDDEN",
+      action: "HIDE",
+      reason: "rule_requires_human_hide_first",
+    });
   });
 
-  it("reviews self-harm instead of auto-hiding", () => {
+  it("reviews self-harm without auto-hiding when escalate-only", () => {
     const decision = evaluateModerationPolicy({
       result: result({
         categories: [{ name: "self_harm_related", confidence: 0.95 }],
@@ -156,7 +186,7 @@ describe("evaluateModerationPolicy", () => {
         recommended_action: "ESCALATE",
       }),
       rules,
-      policyConfidenceThreshold: 0.9,
+      policyConfidenceThreshold: DEFAULT_POLICY_CONFIDENCE_THRESHOLD,
       capabilities: hideCapable,
     });
 
@@ -172,7 +202,7 @@ describe("evaluateModerationPolicy", () => {
         recommended_action: "HIDE",
       }),
       rules,
-      policyConfidenceThreshold: 0.9,
+      policyConfidenceThreshold: DEFAULT_POLICY_CONFIDENCE_THRESHOLD,
       capabilities: {
         hideComments: false,
         unhideComments: false,

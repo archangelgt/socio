@@ -1,5 +1,8 @@
 import { createDb } from "@social-ai/db";
-import type { MetaConfig } from "@social-ai/services";
+import {
+  type MetaConfig,
+  tightenExistingModerationPolicies,
+} from "@social-ai/services";
 import { buildApp, buildRuntime } from "./app";
 
 const host = process.env.API_HOST ?? "0.0.0.0";
@@ -30,6 +33,15 @@ const meta: MetaConfig | undefined = (() => {
 
 const db = databaseUrl ? createDb(databaseUrl) : undefined;
 const ctx = db ? buildRuntime(db, tokenKey, meta) : undefined;
+
+if (ctx) {
+  try {
+    const tightened = await tightenExistingModerationPolicies(ctx.db);
+    console.info("moderation policies tightened", tightened);
+  } catch (error) {
+    console.error("failed to tighten moderation policies", error);
+  }
+}
 
 const app = await buildApp({
   ctx,

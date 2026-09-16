@@ -28,7 +28,7 @@ const META_CAPABILITIES: ChannelCapabilities = {
   unhideComments: true,
   deleteComments: false,
   replyToComments: true,
-  sendMessages: false,
+  sendMessages: true,
   publishPosts: false,
 };
 
@@ -89,8 +89,32 @@ export class MetaChannelAdapter implements ChannelAdapter {
     return normalizeMetaPayload(input);
   }
 
-  async sendMessage(_input: SendMessageInput): Promise<never> {
-    throw new UnsupportedChannelActionError("sendMessage", this.provider);
+  async sendMessage(
+    input: SendMessageInput,
+  ): Promise<{ ok: true; externalMessageId: string }> {
+    const text = input.body.trim();
+    if (!text) {
+      throw new ChannelProviderError(
+        "validation_error",
+        "Message text is required.",
+      );
+    }
+    const accessToken = requireToken(input);
+    const pageId = input.accountId;
+    const result = await graphRequest<{ message_id?: string }>(this.config, {
+      method: "POST",
+      path: `/${pageId}/messages`,
+      accessToken,
+      body: {
+        recipient: JSON.stringify({ id: input.recipientId }),
+        messaging_type: "RESPONSE",
+        message: JSON.stringify({ text }),
+      },
+    });
+    return {
+      ok: true,
+      externalMessageId: result.message_id ?? `msg-${Date.now()}`,
+    };
   }
 
   async hideComment(input: HideCommentInput): Promise<{

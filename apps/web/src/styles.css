@@ -1307,6 +1307,18 @@ tr.is-replying td {
   }
 }
 
+.inbox-thread {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+.thread-messages {
+  margin-bottom: 0.75rem;
+  max-height: 280px;
+  overflow: auto;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .boot img,
   .m-mascot,

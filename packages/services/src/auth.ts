@@ -10,7 +10,10 @@ import {
 } from "@social-ai/db";
 import type { MembershipRole } from "@social-ai/domain";
 import { roleAtLeast } from "@social-ai/domain";
-import { defaultModerationRules } from "@social-ai/moderation";
+import {
+  DEFAULT_POLICY_CONFIDENCE_THRESHOLD,
+  defaultModerationRules,
+} from "@social-ai/moderation";
 import { eq } from "drizzle-orm";
 import { writeAudit } from "./audit";
 import {
@@ -47,7 +50,7 @@ async function seedBrandPolicy(
       brandId,
       name: "Default",
       enabled: true,
-      confidenceThreshold: 0.9,
+      confidenceThreshold: DEFAULT_POLICY_CONFIDENCE_THRESHOLD,
     })
     .returning();
 

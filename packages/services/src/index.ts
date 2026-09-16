@@ -67,7 +67,14 @@ export {
   listComments,
   listConversations,
   type InboxListFilters,
+  type InboxListQuery,
 } from "./comments";
+export {
+  humanReplyToConversation,
+  listConversationMessages,
+  suggestConversationReply,
+} from "./conversation-reply";
+export { tightenExistingModerationPolicies } from "./tighten-policies";
 export {
   resolveLinkedAccountIds,
   resolveInboxAccountIds,

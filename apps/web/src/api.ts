@@ -132,7 +132,17 @@ export const api = {
     }),
   comments: (
     organizationId: string,
-    filters?: { socialAccountId?: string; brandId?: string },
+    filters?: {
+      socialAccountId?: string;
+      brandId?: string;
+      status?: string;
+      severity?: string;
+      q?: string;
+      sort?: string;
+      order?: "asc" | "desc";
+      page?: number;
+      pageSize?: number;
+    },
   ) => {
     const params = new URLSearchParams();
     if (filters?.socialAccountId) {
@@ -140,6 +150,27 @@ export const api = {
     }
     if (filters?.brandId) {
       params.set("brandId", filters.brandId);
+    }
+    if (filters?.status) {
+      params.set("status", filters.status);
+    }
+    if (filters?.severity) {
+      params.set("severity", filters.severity);
+    }
+    if (filters?.q) {
+      params.set("q", filters.q);
+    }
+    if (filters?.sort) {
+      params.set("sort", filters.sort);
+    }
+    if (filters?.order) {
+      params.set("order", filters.order);
+    }
+    if (filters?.page) {
+      params.set("page", String(filters.page));
+    }
+    if (filters?.pageSize) {
+      params.set("pageSize", String(filters.pageSize));
     }
     const query = params.toString();
     return request<{
@@ -162,6 +193,10 @@ export const api = {
         provider: string;
         brandName: string | null;
       }[];
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
     }>(`/api/v1/comments${query ? `?${query}` : ""}`, { organizationId });
   },
   syncComments: (organizationId: string) =>
@@ -184,7 +219,14 @@ export const api = {
     }),
   conversations: (
     organizationId: string,
-    filters?: { socialAccountId?: string; brandId?: string },
+    filters?: {
+      socialAccountId?: string;
+      brandId?: string;
+      q?: string;
+      order?: "asc" | "desc";
+      page?: number;
+      pageSize?: number;
+    },
   ) => {
     const params = new URLSearchParams();
     if (filters?.socialAccountId) {
@@ -192,6 +234,18 @@ export const api = {
     }
     if (filters?.brandId) {
       params.set("brandId", filters.brandId);
+    }
+    if (filters?.q) {
+      params.set("q", filters.q);
+    }
+    if (filters?.order) {
+      params.set("order", filters.order);
+    }
+    if (filters?.page) {
+      params.set("page", String(filters.page));
+    }
+    if (filters?.pageSize) {
+      params.set("pageSize", String(filters.pageSize));
     }
     const query = params.toString();
     return request<{
@@ -208,10 +262,46 @@ export const api = {
         brandName: string | null;
         lastMessageBody: string | null;
       }[];
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
     }>(`/api/v1/conversations${query ? `?${query}` : ""}`, {
       organizationId,
     });
   },
+  conversationMessages: (organizationId: string, conversationId: string) =>
+    request<{
+      messages: {
+        id: string;
+        body: string;
+        direction: string;
+        senderType: string;
+        createdAt: string;
+      }[];
+    }>(`/api/v1/conversations/${conversationId}/messages`, {
+      organizationId,
+    }),
+  replyToConversation: (
+    organizationId: string,
+    conversationId: string,
+    text: string,
+  ) =>
+    request<{ ok: boolean }>(
+      `/api/v1/conversations/${conversationId}/messages`,
+      {
+        method: "POST",
+        organizationId,
+        body: { text },
+      },
+    ),
+  suggestConversationReply: (organizationId: string, conversationId: string) =>
+    request<{
+      suggestion: { text: string; provider: string; model: string };
+    }>(`/api/v1/conversations/${conversationId}/suggest-reply`, {
+      method: "POST",
+      organizationId,
+    }),
   queue: (
     organizationId: string,
     filters?: {

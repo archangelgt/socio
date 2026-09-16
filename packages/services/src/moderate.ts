@@ -220,7 +220,7 @@ export async function processModeration(
   const decision = evaluateModerationPolicy({
     result,
     rules,
-    policyConfidenceThreshold: policy?.confidenceThreshold ?? 0.9,
+    policyConfidenceThreshold: policy?.confidenceThreshold ?? 0.65,
     capabilities: {
       hideComments: capabilities.hideComments,
       unhideComments: capabilities.unhideComments,

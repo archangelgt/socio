@@ -26,6 +26,11 @@ const ACTION_RANK: Record<ModerationAction, number> = {
   DELETE: 6,
 };
 
+/** Hide-first floor: uncertain abuse stays off the public feed. */
+export const HIDE_FIRST_CONFIDENCE_FLOOR = 0.5;
+export const DEFAULT_POLICY_CONFIDENCE_THRESHOLD = 0.65;
+export const DEFAULT_RULE_MINIMUM_CONFIDENCE = 0.65;
+
 export type ChannelModerationCapabilities = {
   hideComments: boolean;
   unhideComments: boolean;
@@ -46,21 +51,22 @@ export type PolicyEvaluation = {
 };
 
 export function defaultModerationRules(): ModerationRule[] {
-  const hideHigh = (
+  const hideAbuse = (
     category: ModerationCategory,
-    minimum_severity: Severity = "HIGH",
+    minimum_severity: Severity = "LOW",
   ): ModerationRule => ({
     category,
     minimum_severity,
-    minimum_confidence: 0.9,
+    minimum_confidence: DEFAULT_RULE_MINIMUM_CONFIDENCE,
     action: "HIDE",
     require_human: false,
     enabled: true,
   });
 
   return [
-    hideHigh("hate_speech"),
-    hideHigh("harassment"),
+    hideAbuse("hate_speech"),
+    hideAbuse("harassment"),
+    hideAbuse("bullying"),
     {
       category: "threat",
       minimum_severity: "HIGH",
@@ -69,14 +75,14 @@ export function defaultModerationRules(): ModerationRule[] {
       require_human: true,
       enabled: true,
     },
-    hideHigh("discrimination"),
-    hideHigh("severe_profanity"),
-    hideHigh("spam"),
-    hideHigh("scam"),
-    hideHigh("phishing"),
-    hideHigh("sexual_content"),
-    hideHigh("violent_content"),
-    hideHigh("graphic_content"),
+    hideAbuse("discrimination"),
+    hideAbuse("severe_profanity"),
+    hideAbuse("spam", "MEDIUM"),
+    hideAbuse("scam", "MEDIUM"),
+    hideAbuse("phishing", "MEDIUM"),
+    hideAbuse("sexual_content", "MEDIUM"),
+    hideAbuse("violent_content", "MEDIUM"),
+    hideAbuse("graphic_content", "MEDIUM"),
     {
       category: "self_harm_related",
       minimum_severity: "NONE",
@@ -98,6 +104,25 @@ function strongestAction(actions: ModerationAction[]): ModerationAction {
   );
 }
 
+function hasAbuseSignal(result: ModerationResult): boolean {
+  if (
+    result.recommended_action === "HIDE" ||
+    result.recommended_action === "FLAG" ||
+    result.recommended_action === "DELETE"
+  ) {
+    return true;
+  }
+  return result.categories.some((item) => !isNormalCategory(item.name));
+}
+
+function autoHide(reason: string): PolicyEvaluation {
+  return {
+    queueState: "AUTO_HIDDEN",
+    action: "HIDE",
+    reason,
+  };
+}
+
 export function evaluateModerationPolicy(
   input: PolicyEvaluationInput,
 ): PolicyEvaluation {
@@ -105,18 +130,19 @@ export function evaluateModerationPolicy(
   const rules = input.rules.filter((rule) => rule.enabled);
 
   if (result.needs_human_review) {
+    // Threats / self-harm stay in review; still hide-first when the model
+    // recommends hiding and the channel can, so the public feed stays clean.
+    if (
+      result.recommended_action === "HIDE" &&
+      capabilities.hideComments &&
+      result.overall_confidence >= HIDE_FIRST_CONFIDENCE_FLOOR
+    ) {
+      return autoHide("model_review_hide_first");
+    }
     return {
       queueState: "REVIEW_REQUIRED",
       action: null,
       reason: "model_requested_review",
-    };
-  }
-
-  if (result.overall_confidence < 0.7) {
-    return {
-      queueState: "REVIEW_REQUIRED",
-      action: null,
-      reason: "low_confidence",
     };
   }
 
@@ -145,7 +171,22 @@ export function evaluateModerationPolicy(
       result.categories.length > 0 &&
       result.categories.every((item) => isNormalCategory(item.name));
 
+    if (
+      hasAbuseSignal(result) &&
+      capabilities.hideComments &&
+      result.overall_confidence >= HIDE_FIRST_CONFIDENCE_FLOOR
+    ) {
+      return autoHide("abuse_signal_hide_first");
+    }
+
     if (onlyNormal || result.recommended_action === "ALLOW") {
+      if (result.overall_confidence < HIDE_FIRST_CONFIDENCE_FLOOR) {
+        return {
+          queueState: "REVIEW_REQUIRED",
+          action: null,
+          reason: "low_confidence",
+        };
+      }
       return {
         queueState: "AUTO_ALLOWED",
         action: "ALLOW",
@@ -167,21 +208,17 @@ export function evaluateModerationPolicy(
   );
 
   if (applicable.some((rule) => rule.require_human)) {
+    if (
+      action === "HIDE" &&
+      capabilities.hideComments &&
+      result.overall_confidence >= HIDE_FIRST_CONFIDENCE_FLOOR
+    ) {
+      return autoHide("rule_requires_human_hide_first");
+    }
     return {
       queueState: "REVIEW_REQUIRED",
       action,
       reason: "rule_requires_human",
-    };
-  }
-
-  if (
-    result.overall_confidence < 0.9 ||
-    result.overall_confidence < requiredConfidence
-  ) {
-    return {
-      queueState: "REVIEW_REQUIRED",
-      action,
-      reason: "medium_confidence",
     };
   }
 
@@ -202,10 +239,16 @@ export function evaluateModerationPolicy(
   }
 
   if (action === "HIDE") {
+    if (result.overall_confidence >= requiredConfidence) {
+      return autoHide("policy_auto_hide");
+    }
+    if (result.overall_confidence >= HIDE_FIRST_CONFIDENCE_FLOOR) {
+      return autoHide("uncertain_hide_first");
+    }
     return {
-      queueState: "AUTO_HIDDEN",
+      queueState: "REVIEW_REQUIRED",
       action: "HIDE",
-      reason: "policy_auto_hide",
+      reason: "very_low_confidence",
     };
   }
 

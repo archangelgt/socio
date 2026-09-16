@@ -18,12 +18,14 @@ import {
   getPostPreview,
   humanModerate,
   humanReplyToComment,
+  humanReplyToConversation,
   hydrateMissingPostMedia,
   ingestWebhook,
   isUniqueViolation,
   listBrands,
   listChannels,
   listComments,
+  listConversationMessages,
   listConversations,
   listModerationQueue,
   loginUser,
@@ -34,7 +36,9 @@ import {
   setChannelAutoReply,
   startMetaOAuth,
   suggestCommentReply,
+  suggestConversationReply,
   syncInstagramComments,
+  tightenExistingModerationPolicies,
 } from "@social-ai/services";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { ZodError, z } from "zod";
@@ -419,12 +423,17 @@ export async function buildApp(options: AppOptions) {
       .object({
         socialAccountId: z.string().uuid().optional(),
         brandId: z.string().uuid().optional(),
+        status: z.string().optional(),
+        severity: z.string().optional(),
+        q: z.string().max(200).optional(),
+        sort: z.string().optional(),
+        order: z.enum(["asc", "desc"]).optional(),
+        page: z.coerce.number().int().positive().optional(),
+        pageSize: z.coerce.number().int().positive().max(100).optional(),
       })
       .parse(request.query);
     await hydrateMissingPostMedia(ctx, membership.organizationId);
-    return {
-      comments: await listComments(ctx.db, membership.organizationId, query),
-    };
+    return listComments(ctx.db, membership.organizationId, query);
   });
 
   app.post("/api/v1/comments/sync", async (request) => {
@@ -484,15 +493,63 @@ export async function buildApp(options: AppOptions) {
       .object({
         socialAccountId: z.string().uuid().optional(),
         brandId: z.string().uuid().optional(),
+        q: z.string().max(200).optional(),
+        order: z.enum(["asc", "desc"]).optional(),
+        page: z.coerce.number().int().positive().optional(),
+        pageSize: z.coerce.number().int().positive().max(100).optional(),
       })
       .parse(request.query);
-    return {
-      conversations: await listConversations(
-        ctx.db,
-        membership.organizationId,
-        query,
-      ),
-    };
+    return listConversations(ctx.db, membership.organizationId, query);
+  });
+
+  app.get("/api/v1/conversations/:id/messages", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "AGENT",
+    );
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const messages = await listConversationMessages(ctx, {
+      organizationId: membership.organizationId,
+      conversationId: params.id,
+    });
+    return { messages };
+  });
+
+  app.post("/api/v1/conversations/:id/messages", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z
+      .object({ text: z.string().min(1).max(2000) })
+      .parse(request.body);
+    return humanReplyToConversation(ctx, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      conversationId: params.id,
+      text: body.text,
+    });
+  });
+
+  app.post("/api/v1/conversations/:id/suggest-reply", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const suggestion = await suggestConversationReply(ctx, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      conversationId: params.id,
+    });
+    return { suggestion };
   });
 
   app.get("/api/v1/posts/:id", async (request) => {

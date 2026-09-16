@@ -120,37 +120,40 @@ CRITICAL
 
 Confidence is a routing signal, not proof of truth.
 
-Default:
+Default (ADR-027 — hide-first for abuse):
 
 ```text
-0.90–1.00  high     auto action may run if policy allows
-0.70–0.89  medium   REVIEW_REQUIRED
-0.00–0.69  low      REVIEW_REQUIRED
+≥ 0.65 with matching hide rule     AUTO_HIDDEN
+0.50–0.64 abuse / hide signal      AUTO_HIDDEN (uncertain_hide_first)
+normal/safe ≥ 0.50                 AUTO_ALLOWED when no violation
+below 0.50 without clear allow     REVIEW_REQUIRED
 ```
 
-Do not use a queue status named `escalate` for low confidence. `ESCALATE` is an action, not a default routing outcome.
+Do not leave insulting or profane comments visible while waiting for a human.
+Organizations can still raise thresholds; the product default is stricter.
 
-Organizations can configure thresholds.
+Do not use a queue status named `escalate` for low confidence. `ESCALATE` is an action, not a default routing outcome.
 
 ## Default moderation policy
 
 Recommended initial defaults:
 
 ```text
-hate_speech         HIGH/CRITICAL + >=90% → HIDE
-harassment          HIGH/CRITICAL + >=90% → HIDE
-threat              any HIGH/CRITICAL     → REVIEW
-discrimination      HIGH/CRITICAL + >=90% → HIDE
-severe_profanity    HIGH + >=90%          → HIDE
-spam                HIGH + >=90%          → HIDE
-scam                HIGH + >=90%          → HIDE
-phishing            HIGH + >=90%          → HIDE
-sexual_content      HIGH + >=90%          → HIDE
-violent_content     HIGH + >=90%          → HIDE
-graphic_content     HIGH + >=90%          → HIDE
-self_harm_related                         → REVIEW
-unknown                                   → REVIEW
-safe                                      → ALLOW
+hate_speech         LOW+ + >=65% → HIDE (hide-first if uncertain)
+harassment          LOW+ + >=65% → HIDE
+bullying            LOW+ + >=65% → HIDE
+threat              HIGH+        → HIDE + human review (hide-first)
+discrimination      LOW+ + >=65% → HIDE
+severe_profanity    LOW+ + >=65% → HIDE
+spam                MEDIUM+ + >=65% → HIDE
+scam                MEDIUM+ + >=65% → HIDE
+phishing            MEDIUM+ + >=65% → HIDE
+sexual_content      MEDIUM+ + >=65% → HIDE
+violent_content     MEDIUM+ + >=65% → HIDE
+graphic_content     MEDIUM+ + >=65% → HIDE
+self_harm_related                 → REVIEW
+unknown                           → REVIEW
+safe                              → ALLOW
 ```
 
 These are defaults, not immutable rules.
