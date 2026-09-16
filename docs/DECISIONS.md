@@ -173,7 +173,7 @@ Reason: operators asked for AI-assisted public replies without waiting for Phase
 
 ## ADR-026 — Per-account auto-reply opt-in
 
-Decision: Moderators may enable **Modo automático** per social account (`social_accounts.metadata_json.autoReplyEnabled`). When on, after moderation (and only if the comment is not hidden/failed), Socio drafts a reply with `suggestReply` and enqueues `reply` on the outbound action bus. The AI never calls a channel adapter.
+Decision: Moderators may enable **Modo automático** per social account (`social_accounts.metadata_json.autoReplyEnabled`). When on, after a comment is **allowed** (`AUTO_ALLOWED`, or human `APPROVED`/`OVERRIDDEN`), Socio drafts a reply with `suggestReply` and enqueues `reply` on the outbound action bus. Hidden, failed, and review-required comments are skipped. The AI never calls a channel adapter.
 
 Reason: operators asked for automatic public replies on selected accounts. The toggle is prior human authorization; ADR-005 still holds because posting goes through the outbound bus + account capability checks, not the model.
 

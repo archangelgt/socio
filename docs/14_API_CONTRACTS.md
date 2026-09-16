@@ -97,7 +97,7 @@ List items include `socialAccountId`, `accountDisplayName`, `provider`, `brandId
 
 Filtering by `socialAccountId` includes Meta Page + linked Instagram siblings that share the same `metadata.pageId` (so CADI Facebook and `@cadi.gt` are one area).
 
-`PATCH /api/v1/channels/:id/auto-reply` body: `{ "enabled": boolean, "siblingIds"?: uuid[] }`. Persists `autoReplyEnabled` on the account (and optional Meta Page/IG siblings). When enabled, new comments on that account get an AI public reply after moderation unless hidden/failed (ADR-026).
+`PATCH /api/v1/channels/:id/auto-reply` body: `{ "enabled": boolean, "siblingIds"?: uuid[] }`. Persists `autoReplyEnabled` on the account (and optional Meta Page/IG siblings). When enabled, allowed comments on that account get an AI public reply after moderation or human allow (ADR-026); review/hide/fail paths skip auto-reply.
 
 `POST /api/v1/comments/:id/reply` body: `{ "text": string }` (1–2000 chars). Human reply only; queues outbound `reply` via the channel adapter. Not an AI suggested-reply endpoint.
 

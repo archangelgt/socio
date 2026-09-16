@@ -123,10 +123,6 @@ async function failModeration(
     entityId: comment.id,
     metadata: { error: publicProviderError(error) },
   });
-  await maybeAutoReplyToComment(ctx, {
-    organizationId: comment.organizationId,
-    commentId: comment.id,
-  });
 }
 
 export async function processModeration(
@@ -301,7 +297,10 @@ export async function processModeration(
       actionType: "hide",
       provider: account?.provider ?? "mock",
     });
-  } else {
+    return;
+  }
+
+  if (decision.queueState === "AUTO_ALLOWED") {
     await maybeAutoReplyToComment(ctx, {
       organizationId: comment.organizationId,
       commentId: comment.id,
@@ -621,6 +620,11 @@ export async function humanModerate(
           : "moderation.allowed",
       entityType: "moderation_decision",
       entityId: decision.id,
+    });
+
+    await maybeAutoReplyToComment(ctx, {
+      organizationId: input.organizationId,
+      commentId: comment.id,
     });
     return;
   }

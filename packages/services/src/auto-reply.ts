@@ -127,10 +127,8 @@ export async function maybeAutoReplyToComment(
     return { replied: false, reason: "comment_not_visible" };
   }
 
-  if (
-    comment.moderationStatus === "AUTO_HIDDEN" ||
-    comment.moderationStatus === "ACTION_FAILED"
-  ) {
+  const allowedStatuses = new Set(["AUTO_ALLOWED", "APPROVED", "OVERRIDDEN"]);
+  if (!allowedStatuses.has(comment.moderationStatus)) {
     return { replied: false, reason: "moderation_blocked" };
   }
 
