@@ -9,6 +9,7 @@ import {
   type MetaConfig,
   createInlineRuntime,
   syncAllInstagramComments,
+  syncAllMetaMessages,
 } from "@social-ai/services";
 
 const redisUrl = process.env.REDIS_URL;
@@ -75,11 +76,13 @@ if (!databaseUrl || !meta) {
     }
     running = true;
     try {
-      const result = await syncAllInstagramComments(ctx);
-      console.info("[worker] Instagram comment poller", result);
+      const comments = await syncAllInstagramComments(ctx);
+      console.info("[worker] Instagram comment poller", comments);
+      const messages = await syncAllMetaMessages(ctx);
+      console.info("[worker] Meta message poller", messages);
     } catch (error) {
       console.error(
-        "[worker] Instagram comment poller failed",
+        "[worker] poller failed",
         error instanceof Error ? error.message : error,
       );
     } finally {
@@ -87,7 +90,7 @@ if (!databaseUrl || !meta) {
     }
   };
 
-  console.info("[worker] Instagram comment poller every", pollMs, "ms");
+  console.info("[worker] Meta poller every", pollMs, "ms");
   void poll();
   setInterval(() => {
     void poll();

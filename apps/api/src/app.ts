@@ -38,6 +38,7 @@ import {
   suggestCommentReply,
   suggestConversationReply,
   syncInstagramComments,
+  syncMetaMessages,
   tightenExistingModerationPolicies,
 } from "@social-ai/services";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
@@ -500,6 +501,16 @@ export async function buildApp(options: AppOptions) {
       })
       .parse(request.query);
     return listConversations(ctx.db, membership.organizationId, query);
+  });
+
+  app.post("/api/v1/conversations/sync", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    return syncMetaMessages(ctx, membership.organizationId);
   });
 
   app.get("/api/v1/conversations/:id/messages", async (request) => {

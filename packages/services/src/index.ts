@@ -46,7 +46,12 @@ export {
 } from "./auto-reply";
 export { completeMetaOAuth, startMetaOAuth } from "./meta";
 export { ingestWebhook, processInboundEvent } from "./inbound";
-export { syncInstagramComments, syncAllInstagramComments } from "./sync";
+export {
+  syncInstagramComments,
+  syncAllInstagramComments,
+  syncMetaMessages,
+  syncAllMetaMessages,
+} from "./sync";
 export {
   humanModerate,
   humanReplyToComment,

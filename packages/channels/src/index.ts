@@ -16,9 +16,11 @@ export {
   subscribeMetaPage,
   subscribeMetaInstagram,
   listInstagramMediaComments,
+  listPageConversationMessages,
   fetchInstagramMedia,
   pickMediaThumbnail,
   type MetaPage,
+  type SyncedPageMessage,
 } from "./meta-graph";
 export {
   isMetaProvider,

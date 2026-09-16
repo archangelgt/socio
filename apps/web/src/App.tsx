@@ -1443,9 +1443,6 @@ function InboxPage({
   organizationId: string;
   setError: (value: string | null) => void;
 }) {
-  const [comments, setComments] = useState<
-    Awaited<ReturnType<typeof api.comments>>["comments"]
-  >([]);
   const [conversations, setConversations] = useState<
     Awaited<ReturnType<typeof api.conversations>>["conversations"]
   >([]);
@@ -1453,21 +1450,13 @@ function InboxPage({
   const [accountId, setAccountId] = useState(() =>
     readStoredAccountId(organizationId),
   );
-  const [statusFilter, setStatusFilter] = useState<QueueStatusFilter>("");
-  const [severityFilter, setSeverityFilter] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [convPage, setConvPage] = useState(1);
-  const [convTotal, setConvTotal] = useState(0);
-  const [convTotalPages, setConvTotalPages] = useState(1);
-  const [replyFor, setReplyFor] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState("");
-  const [replyBusy, setReplyBusy] = useState(false);
-  const [suggestBusy, setSuggestBusy] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
   >(null);
@@ -1483,7 +1472,6 @@ function InboxPage({
     const timer = window.setTimeout(() => {
       setSearch(searchInput.trim());
       setPage(1);
-      setConvPage(1);
     }, 300);
     return () => window.clearTimeout(timer);
   }, [searchInput]);
@@ -1502,20 +1490,17 @@ function InboxPage({
       .catch((err: Error) => setError(err.message));
   }, [organizationId, accountId, setError]);
 
-  const reloadComments = useCallback(() => {
+  const reloadConversations = useCallback(() => {
     void api
-      .comments(organizationId, {
+      .conversations(organizationId, {
         socialAccountId: accountId || undefined,
-        status: statusFilter || undefined,
-        severity: severityFilter || undefined,
         q: search || undefined,
-        sort: "createdAt",
         order: "desc",
         page,
         pageSize,
       })
       .then((data) => {
-        setComments(data.comments);
+        setConversations(data.conversations);
         setTotal(data.total);
         setTotalPages(data.totalPages);
         if (data.page !== page) {
@@ -1523,44 +1508,49 @@ function InboxPage({
         }
       })
       .catch((err: Error) => setError(err.message));
-  }, [
-    organizationId,
-    accountId,
-    statusFilter,
-    severityFilter,
-    search,
-    page,
-    pageSize,
-    setError,
-  ]);
-
-  const reloadConversations = useCallback(() => {
-    void api
-      .conversations(organizationId, {
-        socialAccountId: accountId || undefined,
-        q: search || undefined,
-        order: "desc",
-        page: convPage,
-        pageSize,
-      })
-      .then((data) => {
-        setConversations(data.conversations);
-        setConvTotal(data.total);
-        setConvTotalPages(data.totalPages);
-        if (data.page !== convPage) {
-          setConvPage(data.page);
-        }
-      })
-      .catch((err: Error) => setError(err.message));
-  }, [organizationId, accountId, search, convPage, pageSize, setError]);
-
-  useEffect(() => {
-    reloadComments();
-  }, [reloadComments]);
+  }, [organizationId, accountId, search, page, pageSize, setError]);
 
   useEffect(() => {
     reloadConversations();
   }, [reloadConversations]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let inFlight = false;
+    const sync = (showBusy: boolean) => {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
+      if (showBusy) {
+        setSyncing(true);
+      }
+      void api
+        .syncMessages(organizationId)
+        .then(() => {
+          if (!cancelled) {
+            reloadConversations();
+          }
+        })
+        .catch((err: Error) => {
+          if (!cancelled && showBusy) {
+            setError(err.message);
+          }
+        })
+        .finally(() => {
+          inFlight = false;
+          if (!cancelled && showBusy) {
+            setSyncing(false);
+          }
+        });
+    };
+    sync(true);
+    const timer = window.setInterval(() => sync(false), 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [organizationId, reloadConversations, setError]);
 
   const openConversation = (conversationId: string) => {
     setActiveConversationId(conversationId);
@@ -1574,15 +1564,13 @@ function InboxPage({
   const activeLabel = selectedGroup(groups, accountId)?.label ?? "All accounts";
   const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const rangeEnd = Math.min(page * pageSize, total);
-  const convRangeStart = convTotal === 0 ? 0 : (convPage - 1) * pageSize + 1;
-  const convRangeEnd = Math.min(convPage * pageSize, convTotal);
 
   return (
     <>
       <header>
         <h1>Inbox</h1>
         <p className="muted">
-          Comments and messages for {activeLabel}. Newest first.
+          Direct messages for {activeLabel}. Newest first.
         </p>
         <AccountSwitcher
           groups={groups}
@@ -1591,62 +1579,48 @@ function InboxPage({
             setAccountId(next);
             storeAccountId(organizationId, next);
             setPage(1);
-            setConvPage(1);
-            setReplyFor(null);
             setActiveConversationId(null);
           }}
         />
         <div className="moderation-toolbar">
-          <div className="status-filter" role="tablist" aria-label="Status">
-            {STATUS_FILTERS.map((item) => (
-              <button
-                key={item.id || "all"}
-                type="button"
-                role="tab"
-                aria-selected={statusFilter === item.id}
-                className={statusFilter === item.id ? "active" : undefined}
-                onClick={() => {
-                  setStatusFilter(item.id);
-                  setPage(1);
-                }}
-              >
-                {item.label}
-              </button>
-            ))}
+          <div className="button-row">
+            <button
+              type="button"
+              disabled={syncing}
+              onClick={() => {
+                setSyncing(true);
+                void api
+                  .syncMessages(organizationId)
+                  .then(() => reloadConversations())
+                  .catch((err: Error) => setError(err.message))
+                  .finally(() => setSyncing(false));
+              }}
+            >
+              {syncing ? "Syncing messages…" : "Sync messages"}
+            </button>
           </div>
         </div>
         <div className="moderation-controls">
           <label className="moderation-search">
-            <span className="sr-only">Search inbox</span>
+            <span className="sr-only">Search messages</span>
             <input
               type="search"
               value={searchInput}
-              placeholder="Search comment, author, contact…"
+              placeholder="Search contact or message…"
               onChange={(event) => setSearchInput(event.target.value)}
             />
-          </label>
-          <label className="moderation-select">
-            <span className="sr-only">Severity</span>
-            <select
-              value={severityFilter}
-              onChange={(event) => {
-                setSeverityFilter(event.target.value);
-                setPage(1);
-              }}
-            >
-              {SEVERITY_FILTERS.map((item) => (
-                <option key={item || "any"} value={item}>
-                  {item ? item : "Any severity"}
-                </option>
-              ))}
-            </select>
           </label>
         </div>
       </header>
 
-      <h2>Messages</h2>
       {conversations.length === 0 ? (
-        <p className="muted">No direct messages yet.</p>
+        <div className="empty">
+          <img src="/brand/icon.png" alt="" />
+          <p>No direct messages yet.</p>
+          <p className="muted">
+            Hit Sync messages to pull Instagram and Facebook DMs from Meta.
+          </p>
+        </div>
       ) : (
         <>
           <ul className="feed">
@@ -1740,135 +1714,8 @@ function InboxPage({
           </ul>
           <div className="moderation-pager">
             <span className="muted">
-              {convTotal === 0
-                ? "No messages"
-                : `${convRangeStart}–${convRangeEnd} of ${convTotal}`}
-            </span>
-            <div className="button-row">
-              <button
-                type="button"
-                className="ghost"
-                disabled={convPage <= 1}
-                onClick={() =>
-                  setConvPage((current) => Math.max(1, current - 1))
-                }
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                disabled={convPage >= convTotalPages}
-                onClick={() =>
-                  setConvPage((current) =>
-                    Math.min(convTotalPages, current + 1),
-                  )
-                }
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-
-      <h2>Comments</h2>
-      {comments.length === 0 ? (
-        <div className="empty">
-          <img src="/brand/icon.png" alt="" />
-          <p>All your channels, one inbox.</p>
-          <p className="muted">No comments yet. Sync Instagram to fill this.</p>
-        </div>
-      ) : (
-        <>
-          <ul className="feed">
-            {comments.map((comment) => (
-              <li key={comment.id}>
-                <div className="comment-cell">
-                  <AuthorAvatar name={comment.authorDisplayName} />
-                  <div>
-                    <div className="row">
-                      <strong>{comment.authorDisplayName ?? "Unknown"}</strong>
-                      <span className="muted">
-                        {formatWhen(comment.createdAt)}
-                      </span>
-                    </div>
-                    <AccountBadge
-                      accountDisplayName={comment.accountDisplayName}
-                      brandName={comment.brandName}
-                      provider={comment.provider}
-                    />
-                    <p>{comment.body}</p>
-                    <StatusBadge
-                      status={displayStatus({
-                        moderationStatus: comment.moderationStatus,
-                        commentStatus: comment.status,
-                      })}
-                    />
-                    {comment.postBody ? (
-                      <p className="muted">On: {comment.postBody}</p>
-                    ) : null}
-                    <div className="button-row">
-                      <button
-                        type="button"
-                        className="ghost"
-                        onClick={() => {
-                          setReplyFor(comment.id);
-                          setReplyText("");
-                        }}
-                      >
-                        Reply
-                      </button>
-                    </div>
-                    {replyFor === comment.id ? (
-                      <ReplyComposer
-                        replyText={replyText}
-                        onReplyText={setReplyText}
-                        replyBusy={replyBusy}
-                        suggestBusy={suggestBusy}
-                        onCancelReply={() => {
-                          setReplyFor(null);
-                          setReplyText("");
-                        }}
-                        onSuggest={() => {
-                          setSuggestBusy(true);
-                          void api
-                            .suggestReply(organizationId, comment.id)
-                            .then((data) => setReplyText(data.suggestion.text))
-                            .catch((err: Error) => setError(err.message))
-                            .finally(() => setSuggestBusy(false));
-                        }}
-                        onSendReply={() => {
-                          setReplyBusy(true);
-                          void api
-                            .replyToComment(
-                              organizationId,
-                              comment.id,
-                              replyText,
-                            )
-                            .then(() => {
-                              setReplyFor(null);
-                              setReplyText("");
-                              reloadComments();
-                            })
-                            .catch((err: Error) => setError(err.message))
-                            .finally(() => setReplyBusy(false));
-                        }}
-                      />
-                    ) : null}
-                  </div>
-                  <PostThumb
-                    postId={comment.postId}
-                    permalink={comment.postPermalink}
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-          <div className="moderation-pager">
-            <span className="muted">
               {total === 0
-                ? "No comments"
+                ? "No messages"
                 : `${rangeStart}–${rangeEnd} of ${total}`}
             </span>
             <div className="button-row">

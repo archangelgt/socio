@@ -183,9 +183,9 @@ Decision: Default moderation is **stricter**. Matching hide rules use severity f
 
 Reason: operators rejected low-confidence insults (e.g. “No usen AI mierda”) remaining public while queued for review. ADR-006’s human-review default still applies to self-harm escalate paths and capability failures; false positives are reversible via unhide.
 
-## ADR-028 — Inbox DM reply + AI draft
+## ADR-028 — Inbox is DMs + AI draft
 
-Decision: Inbox supports human DM replies (`POST /conversations/:id/messages`) and draft AI suggestions (`POST /conversations/:id/suggest-reply`), plus the same newest-first search/filter/pagination pattern as the moderation queue for comments and conversations.
+Decision: Inbox is **direct messages only** (no comment feed). Moderators sync Meta DMs with `POST /conversations/sync`, reply via `POST /conversations/:id/messages`, and get draft AI suggestions via `POST /conversations/:id/suggest-reply`. Comments stay on the Moderation page. Newest-first search/filter/pagination applies to conversations.
 
-Reason: unified inbox operators need to answer private messages with the same assist pattern as public comment replies (ADR-025).
+Reason: operators asked for a message-focused inbox with sync and AI assist, separate from public comment moderation.
 

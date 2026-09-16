@@ -712,3 +712,128 @@ export async function fetchInstagramMedia(
     throw error;
   }
 }
+
+export type SyncedPageMessage = {
+  contactExternalId: string;
+  contactDisplayName?: string;
+  messageId: string;
+  body: string;
+  occurredAt: string;
+  direction: "inbound" | "outbound";
+};
+
+type PageConversationsResponse = {
+  data?: Array<{
+    id: string;
+    participants?: {
+      data?: Array<{ id?: string; name?: string; username?: string }>;
+    };
+    messages?: {
+      data?: Array<{
+        id: string;
+        message?: string;
+        created_time?: string;
+        from?: {
+          id?: string;
+          name?: string;
+          username?: string;
+          email?: string;
+        };
+      }>;
+    };
+  }>;
+  paging?: { cursors?: { after?: string }; next?: string };
+};
+
+const CONVERSATION_PAGE_SIZE = 25;
+const DEFAULT_MAX_CONVERSATIONS = 40;
+
+/**
+ * Pull recent Messenger / Instagram DM threads for a Facebook Page.
+ * Contact id matches webhook identity (non-page participant PSID/IGSID).
+ */
+export async function listPageConversationMessages(
+  config: MetaGraphConfig,
+  input: {
+    accessToken: string;
+    pageId: string;
+    platform: "instagram" | "messenger";
+    selfIds?: string[];
+    maxConversations?: number;
+    messagesPerConversation?: number;
+  },
+): Promise<SyncedPageMessage[]> {
+  const maxConversations = Math.max(
+    1,
+    input.maxConversations ?? DEFAULT_MAX_CONVERSATIONS,
+  );
+  const messagesPerConversation = Math.max(
+    1,
+    Math.min(50, input.messagesPerConversation ?? 20),
+  );
+  const selfIds = new Set(
+    [input.pageId, ...(input.selfIds ?? [])].filter(Boolean),
+  );
+  const results: SyncedPageMessage[] = [];
+  let after: string | undefined;
+  let fetched = 0;
+
+  while (fetched < maxConversations) {
+    const pageLimit = Math.min(
+      CONVERSATION_PAGE_SIZE,
+      maxConversations - fetched,
+    );
+    const response = await graphRequest<PageConversationsResponse>(config, {
+      method: "GET",
+      path: `/${input.pageId}/conversations`,
+      accessToken: input.accessToken,
+      query: {
+        platform: input.platform,
+        fields: `participants,updated_time,messages.limit(${messagesPerConversation}){id,message,from,created_time}`,
+        limit: String(pageLimit),
+        after,
+      },
+    });
+
+    const page = response.data ?? [];
+    if (page.length === 0) {
+      break;
+    }
+
+    for (const thread of page) {
+      fetched += 1;
+      const participants = thread.participants?.data ?? [];
+      const contact =
+        participants.find((person) => person.id && !selfIds.has(person.id)) ??
+        participants[0];
+      const contactExternalId = contact?.id;
+      if (!contactExternalId) {
+        continue;
+      }
+      const contactDisplayName = contact.username ?? contact.name;
+
+      for (const message of thread.messages?.data ?? []) {
+        if (!message.id) {
+          continue;
+        }
+        const fromId = message.from?.id;
+        const outbound = fromId ? selfIds.has(fromId) : false;
+        results.push({
+          contactExternalId,
+          contactDisplayName,
+          messageId: message.id,
+          body: message.message ?? "",
+          occurredAt: parseGraphTime(message.created_time),
+          direction: outbound ? "outbound" : "inbound",
+        });
+      }
+    }
+
+    after = response.paging?.cursors?.after;
+    if (!after) {
+      break;
+    }
+  }
+
+  return results;
+}

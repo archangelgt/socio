@@ -101,6 +101,7 @@ Filtering by `socialAccountId` includes Meta Page + linked Instagram siblings th
 `GET /api/v1/conversations/:id/messages` lists thread messages (marks unread false).
 `POST /api/v1/conversations/:id/messages` body `{ "text" }` sends a DM via the channel adapter.
 `POST /api/v1/conversations/:id/suggest-reply` returns a draft suggestion (never sends).
+`POST /api/v1/conversations/sync` pulls recent Meta Instagram/Facebook DMs into the inbox (same hide-first identity as webhooks).
 
 `PATCH /api/v1/channels/:id/auto-reply` body: `{ "enabled": boolean, "siblingIds"?: uuid[] }`. Persists `autoReplyEnabled` on the account (and optional Meta Page/IG siblings). When enabled, allowed comments on that account get an AI public reply after moderation or human allow (ADR-026); review/hide/fail paths skip auto-reply.
 

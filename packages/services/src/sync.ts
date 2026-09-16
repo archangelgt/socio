@@ -2,11 +2,12 @@ import {
   ChannelProviderError,
   type MetaPage,
   listInstagramMediaComments,
+  listPageConversationMessages,
   subscribeMetaPage,
 } from "@social-ai/channels";
 import { inboundEvents, socialAccounts } from "@social-ai/db";
 import { QUEUE_INBOUND_EVENTS } from "@social-ai/domain";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { ServiceContext } from "./context";
 import { decryptSecret } from "./crypto";
 import { AppError } from "./errors";
@@ -179,6 +180,140 @@ export async function syncAllInstagramComments(
   let seen = 0;
   for (const row of rows) {
     const result = await syncInstagramComments(ctx, row.organizationId);
+    ingested += result.ingested;
+    seen += result.seen;
+  }
+  return { organizations: rows.length, ingested, seen };
+}
+
+export async function syncMetaMessages(
+  ctx: ServiceContext,
+  organizationId: string,
+): Promise<{ ingested: number; seen: number }> {
+  if (!ctx.meta) {
+    throw new AppError(
+      501,
+      "META_NOT_CONFIGURED",
+      "Set Meta credentials to sync inbox messages.",
+    );
+  }
+
+  const accounts = await ctx.db
+    .select()
+    .from(socialAccounts)
+    .where(
+      and(
+        eq(socialAccounts.organizationId, organizationId),
+        inArray(socialAccounts.provider, ["instagram", "facebook"]),
+        eq(socialAccounts.status, "active"),
+      ),
+    );
+
+  let ingested = 0;
+  let seen = 0;
+
+  for (const account of accounts) {
+    const accessToken = decryptSecret(
+      account.accessTokenEncrypted,
+      ctx.tokenKey,
+    );
+    await refreshPageWebhookSubscription(ctx, account, accessToken);
+
+    const pageId =
+      pageIdFromMetadata(account.metadataJson) ??
+      (account.provider === "facebook" ? account.externalAccountId : undefined);
+    if (!pageId) {
+      continue;
+    }
+
+    const platform =
+      account.provider === "instagram" ? "instagram" : "messenger";
+    const selfIds =
+      account.provider === "instagram" ? [account.externalAccountId] : [];
+
+    let messages: Awaited<ReturnType<typeof listPageConversationMessages>>;
+    try {
+      messages = await listPageConversationMessages(ctx.meta, {
+        accessToken,
+        pageId,
+        platform,
+        selfIds,
+        maxConversations: 40,
+        messagesPerConversation: 25,
+      });
+    } catch (error) {
+      if (error instanceof ChannelProviderError) {
+        throw new AppError(502, "CHANNEL_PROVIDER_ERROR", error.message);
+      }
+      throw error;
+    }
+
+    seen += messages.length;
+    const prefix = account.provider === "instagram" ? "ig" : "fb";
+
+    for (const message of messages) {
+      const event = {
+        provider: account.provider,
+        accountId: account.externalAccountId,
+        externalEventId: `${prefix}:message:${message.messageId}`,
+        type:
+          message.direction === "inbound"
+            ? ("message.received" as const)
+            : ("message.sent" as const),
+        occurredAt: message.occurredAt,
+        conversation: {
+          externalConversationId: message.contactExternalId,
+          contactExternalId: message.contactExternalId,
+        },
+        message: {
+          externalMessageId: message.messageId,
+          body: message.body || "(empty message)",
+          direction: message.direction,
+        },
+      };
+
+      const inserted = await ctx.db
+        .insert(inboundEvents)
+        .values({
+          organizationId: account.organizationId,
+          socialAccountId: account.id,
+          provider: account.provider,
+          externalEventId: event.externalEventId,
+          payloadJson: event as unknown as Record<string, unknown>,
+          processingStatus: "received",
+        })
+        .onConflictDoNothing()
+        .returning();
+
+      const row = inserted[0];
+      if (!row) {
+        continue;
+      }
+      await ctx.queue.add(QUEUE_INBOUND_EVENTS, { id: row.id });
+      ingested += 1;
+    }
+  }
+
+  return { ingested, seen };
+}
+
+export async function syncAllMetaMessages(
+  ctx: ServiceContext,
+): Promise<{ organizations: number; ingested: number; seen: number }> {
+  const rows = await ctx.db
+    .selectDistinct({ organizationId: socialAccounts.organizationId })
+    .from(socialAccounts)
+    .where(
+      and(
+        inArray(socialAccounts.provider, ["instagram", "facebook"]),
+        eq(socialAccounts.status, "active"),
+      ),
+    );
+
+  let ingested = 0;
+  let seen = 0;
+  for (const row of rows) {
+    const result = await syncMetaMessages(ctx, row.organizationId);
     ingested += result.ingested;
     seen += result.seen;
   }
