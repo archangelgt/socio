@@ -205,10 +205,13 @@ export const api = {
       organizationId,
     }),
   syncMessages: (organizationId: string) =>
-    request<{ ingested: number; seen: number }>("/api/v1/conversations/sync", {
-      method: "POST",
-      organizationId,
-    }),
+    request<{ ingested: number; seen: number; warnings: string[] }>(
+      "/api/v1/conversations/sync",
+      {
+        method: "POST",
+        organizationId,
+      },
+    ),
   replyToComment: (organizationId: string, commentId: string, text: string) =>
     request<{ ok: boolean }>(`/api/v1/comments/${commentId}/reply`, {
       method: "POST",

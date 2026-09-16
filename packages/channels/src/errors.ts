@@ -23,6 +23,12 @@ export class ChannelProviderError extends Error {
   }
 }
 
+export function isInstagramDmAccessDisabled(message: string): boolean {
+  return /disabled access to instagram direct messages|account owner has disabled access/i.test(
+    message,
+  );
+}
+
 export function mapGraphError(
   status: number,
   graphCode: number | undefined,
@@ -31,7 +37,12 @@ export function mapGraphError(
   if (status === 401 || graphCode === 190) {
     return new ChannelProviderError("unauthorized", message, status);
   }
-  if (status === 403 || graphCode === 10 || graphCode === 200) {
+  if (
+    status === 403 ||
+    graphCode === 10 ||
+    graphCode === 200 ||
+    isInstagramDmAccessDisabled(message)
+  ) {
     return new ChannelProviderError("forbidden", message, status);
   }
   if (status === 404 || graphCode === 803) {

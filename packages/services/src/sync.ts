@@ -1,6 +1,7 @@
 import {
   ChannelProviderError,
   type MetaPage,
+  isInstagramDmAccessDisabled,
   listInstagramMediaComments,
   listPageConversationMessages,
   subscribeMetaPage,
@@ -186,10 +187,14 @@ export async function syncAllInstagramComments(
   return { organizations: rows.length, ingested, seen };
 }
 
+function instagramDmAccessHelp(accountLabel: string): string {
+  return `${accountLabel}: Instagram blocked DM API access. On the Instagram app: Settings → Messages and story replies → Message controls → Connected tools → turn ON “Allow access to messages”, then Sync again.`;
+}
+
 export async function syncMetaMessages(
   ctx: ServiceContext,
   organizationId: string,
-): Promise<{ ingested: number; seen: number }> {
+): Promise<{ ingested: number; seen: number; warnings: string[] }> {
   if (!ctx.meta) {
     throw new AppError(
       501,
@@ -211,6 +216,7 @@ export async function syncMetaMessages(
 
   let ingested = 0;
   let seen = 0;
+  const warnings: string[] = [];
 
   for (const account of accounts) {
     const accessToken = decryptSecret(
@@ -223,6 +229,11 @@ export async function syncMetaMessages(
       pageIdFromMetadata(account.metadataJson) ??
       (account.provider === "facebook" ? account.externalAccountId : undefined);
     if (!pageId) {
+      if (account.provider === "instagram") {
+        warnings.push(
+          `${account.displayName}: missing linked Facebook Page id. Reconnect the channel.`,
+        );
+      }
       continue;
     }
 
@@ -242,6 +253,18 @@ export async function syncMetaMessages(
         messagesPerConversation: 25,
       });
     } catch (error) {
+      if (
+        error instanceof ChannelProviderError &&
+        (isInstagramDmAccessDisabled(error.message) ||
+          error.code === "forbidden")
+      ) {
+        warnings.push(
+          isInstagramDmAccessDisabled(error.message)
+            ? instagramDmAccessHelp(account.displayName)
+            : `${account.displayName}: Meta blocked messaging (${error.message})`,
+        );
+        continue;
+      }
       if (error instanceof ChannelProviderError) {
         throw new AppError(502, "CHANNEL_PROVIDER_ERROR", error.message);
       }
@@ -294,12 +317,15 @@ export async function syncMetaMessages(
     }
   }
 
-  return { ingested, seen };
+  return { ingested, seen, warnings };
 }
 
-export async function syncAllMetaMessages(
-  ctx: ServiceContext,
-): Promise<{ organizations: number; ingested: number; seen: number }> {
+export async function syncAllMetaMessages(ctx: ServiceContext): Promise<{
+  organizations: number;
+  ingested: number;
+  seen: number;
+  warnings: string[];
+}> {
   const rows = await ctx.db
     .selectDistinct({ organizationId: socialAccounts.organizationId })
     .from(socialAccounts)
@@ -312,10 +338,12 @@ export async function syncAllMetaMessages(
 
   let ingested = 0;
   let seen = 0;
+  const warnings: string[] = [];
   for (const row of rows) {
     const result = await syncMetaMessages(ctx, row.organizationId);
     ingested += result.ingested;
     seen += result.seen;
+    warnings.push(...result.warnings);
   }
-  return { organizations: rows.length, ingested, seen };
+  return { organizations: rows.length, ingested, seen, warnings };
 }

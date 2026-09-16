@@ -1457,6 +1457,7 @@ function InboxPage({
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [syncing, setSyncing] = useState(false);
+  const [syncWarnings, setSyncWarnings] = useState<string[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
   >(null);
@@ -1527,8 +1528,9 @@ function InboxPage({
       }
       void api
         .syncMessages(organizationId)
-        .then(() => {
+        .then((result) => {
           if (!cancelled) {
+            setSyncWarnings(result.warnings ?? []);
             reloadConversations();
           }
         })
@@ -1591,7 +1593,10 @@ function InboxPage({
                 setSyncing(true);
                 void api
                   .syncMessages(organizationId)
-                  .then(() => reloadConversations())
+                  .then((result) => {
+                    setSyncWarnings(result.warnings ?? []);
+                    reloadConversations();
+                  })
                   .catch((err: Error) => setError(err.message))
                   .finally(() => setSyncing(false));
               }}
@@ -1599,7 +1604,18 @@ function InboxPage({
               {syncing ? "Syncing messages…" : "Sync messages"}
             </button>
           </div>
+          <p className="muted sync-hint">
+            Instagram must allow Connected tools access to messages before DMs
+            can sync.
+          </p>
         </div>
+        {syncWarnings.length > 0 ? (
+          <output className="sync-warnings">
+            {syncWarnings.map((warning) => (
+              <p key={warning}>{warning}</p>
+            ))}
+          </output>
+        ) : null}
         <div className="moderation-controls">
           <label className="moderation-search">
             <span className="sr-only">Search messages</span>
@@ -1618,7 +1634,9 @@ function InboxPage({
           <img src="/brand/icon.png" alt="" />
           <p>No direct messages yet.</p>
           <p className="muted">
-            Hit Sync messages to pull Instagram and Facebook DMs from Meta.
+            Hit Sync messages to pull Instagram and Facebook DMs from Meta. If
+            Meta returns “disabled access to Instagram direct messages”, enable
+            Connected tools → Allow access to messages on that IG account.
           </p>
         </div>
       ) : (

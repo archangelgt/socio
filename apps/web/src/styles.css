@@ -1319,6 +1319,28 @@ tr.is-replying td {
   overflow: auto;
 }
 
+.sync-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+}
+
+.sync-warnings {
+  margin: 0.75rem 0 0;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  background: color-mix(in srgb, #b45309 12%, white);
+  border: 1px solid color-mix(in srgb, #b45309 35%, white);
+  color: #7c2d12;
+}
+
+.sync-warnings p {
+  margin: 0;
+}
+
+.sync-warnings p + p {
+  margin-top: 0.5rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .boot img,
   .m-mascot,
