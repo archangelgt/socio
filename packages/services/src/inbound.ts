@@ -301,12 +301,13 @@ async function persistMessage(
     account.provider,
     event.conversation.contactExternalId,
   );
+  const contactDisplayName = event.conversation.contactDisplayName;
   const [contact] = await ctx.db
     .insert(contacts)
     .values({
       organizationId: account.organizationId,
       externalIdentityHash: hash,
-      displayName: null,
+      displayName: contactDisplayName ?? null,
     })
     .onConflictDoNothing()
     .returning();
@@ -327,6 +328,17 @@ async function persistMessage(
 
   if (!existingContact) {
     return;
+  }
+
+  if (
+    contactDisplayName &&
+    (!existingContact.displayName || existingContact.displayName.length === 0)
+  ) {
+    await ctx.db
+      .update(contacts)
+      .set({ displayName: contactDisplayName })
+      .where(eq(contacts.id, existingContact.id));
+    existingContact.displayName = contactDisplayName;
   }
 
   const [conversation] = await ctx.db

@@ -29,6 +29,7 @@ export type NormalizedComment = {
 export type NormalizedConversation = {
   externalConversationId: string;
   contactExternalId: string;
+  contactDisplayName?: string;
 };
 
 export type NormalizedMessage = {

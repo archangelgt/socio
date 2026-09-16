@@ -339,6 +339,7 @@ export async function syncMetaMessages(
         conversation: {
           externalConversationId: message.contactExternalId,
           contactExternalId: message.contactExternalId,
+          contactDisplayName: message.contactDisplayName,
         },
         message: {
           externalMessageId: message.messageId,

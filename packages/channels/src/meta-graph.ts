@@ -817,19 +817,25 @@ export async function listPageConversationMessages(
         continue;
       }
 
-      const detail = await graphRequest<ConversationThreadResponse>(config, {
-        method: "GET",
-        path: `/${thread.id}`,
-        accessToken: input.accessToken,
-        query: {
-          fields: `participants.limit(5){id,name,username},messages.limit(${messagesPerConversation}){id,message,from{id,name,username},created_time}`,
-        },
-      });
+      let detail: ConversationThreadResponse;
+      try {
+        detail = await graphRequest<ConversationThreadResponse>(config, {
+          method: "GET",
+          path: `/${thread.id}`,
+          accessToken: input.accessToken,
+          query: {
+            fields: `participants.limit(5){id,name,username},messages.limit(${messagesPerConversation}){id,message,from{id,name,username},created_time}`,
+          },
+        });
+      } catch {
+        // One bad/expired thread must not abort the rest of the Page sync.
+        continue;
+      }
 
       const participants = detail.participants?.data ?? [];
-      const contact =
-        participants.find((person) => person.id && !selfIds.has(person.id)) ??
-        participants[0];
+      const contact = participants.find(
+        (person) => person.id && !selfIds.has(person.id),
+      );
       const contactExternalId = contact?.id;
       if (!contactExternalId) {
         continue;
