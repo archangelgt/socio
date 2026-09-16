@@ -953,7 +953,18 @@ function ModerationPage({
   const [replyText, setReplyText] = useState("");
   const [replyBusy, setReplyBusy] = useState(false);
   const [suggestBusy, setSuggestBusy] = useState(false);
+  const [autoReplyBusy, setAutoReplyBusy] = useState(false);
   const groups = groupChannels(channels);
+
+  const activeGroup = selectedGroup(groups, accountId);
+  const autoReplyEnabled = Boolean(
+    activeGroup &&
+      channels.some(
+        (channel) =>
+          activeGroup.accountIds.includes(channel.id) &&
+          channel.autoReplyEnabled,
+      ),
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -1055,6 +1066,25 @@ function ModerationPage({
 
   const activeLabel = selectedGroup(groups, accountId)?.label ?? "All accounts";
 
+  const setAutoReply = (enabled: boolean) => {
+    if (!activeGroup) {
+      setError("Select an account to configure automatic mode.");
+      return;
+    }
+    setAutoReplyBusy(true);
+    void api
+      .setChannelAutoReply(organizationId, activeGroup.primaryAccountId, {
+        enabled,
+        siblingIds: activeGroup.accountIds.filter(
+          (id) => id !== activeGroup.primaryAccountId,
+        ),
+      })
+      .then(() => api.channels(organizationId))
+      .then((data) => setChannels(data.channels))
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setAutoReplyBusy(false));
+  };
+
   const toggleSort = (field: QueueSortField) => {
     if (sort === field) {
       setOrder((current) => (current === "asc" ? "desc" : "asc"));
@@ -1082,6 +1112,33 @@ function ModerationPage({
         <p className="muted">
           AI proposes. Policy decides. You can override. Viewing {activeLabel}.
         </p>
+        <div className="auto-reply-bar">
+          <label
+            className={`auto-reply-toggle ${!activeGroup ? "is-disabled" : ""}`}
+          >
+            <input
+              type="checkbox"
+              role="switch"
+              aria-checked={autoReplyEnabled}
+              checked={autoReplyEnabled}
+              disabled={!activeGroup || autoReplyBusy}
+              onChange={(event) => setAutoReply(event.target.checked)}
+            />
+            <span className="auto-reply-track" aria-hidden>
+              <span className="auto-reply-thumb" />
+            </span>
+            <span className="auto-reply-copy">
+              <strong>Modo automático</strong>
+              <span className="muted">
+                {activeGroup
+                  ? autoReplyEnabled
+                    ? `AI replies publicly on ${activeGroup.label}`
+                    : `Off for ${activeGroup.label}`
+                  : "Select an account to enable per-account auto replies"}
+              </span>
+            </span>
+          </label>
+        </div>
         <AccountSwitcher
           groups={groups}
           value={accountId}

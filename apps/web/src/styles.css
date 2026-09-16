@@ -834,6 +834,78 @@ tr.is-replying td {
   background: var(--light);
 }
 
+.auto-reply-bar {
+  margin: 0.85rem 0 0.25rem;
+}
+
+.auto-reply-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  max-width: 36rem;
+}
+
+.auto-reply-toggle.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.auto-reply-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.auto-reply-track {
+  position: relative;
+  width: 2.75rem;
+  height: 1.55rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #d7dee8;
+  transition: background 0.18s ease;
+}
+
+.auto-reply-thumb {
+  position: absolute;
+  top: 0.18rem;
+  left: 0.18rem;
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 1px 4px rgb(11 15 42 / 18%);
+  transition: transform 0.18s ease;
+}
+
+.auto-reply-toggle input:checked + .auto-reply-track {
+  background: linear-gradient(135deg, var(--indigo), var(--purple));
+}
+
+.auto-reply-toggle input:checked + .auto-reply-track .auto-reply-thumb {
+  transform: translateX(1.15rem);
+}
+
+.auto-reply-toggle input:focus-visible + .auto-reply-track {
+  outline: 2px solid var(--sky);
+  outline-offset: 2px;
+}
+
+.auto-reply-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.auto-reply-copy strong {
+  font-size: 0.92rem;
+  letter-spacing: -0.01em;
+}
+
 .account-switcher {
   display: flex;
   flex-wrap: wrap;

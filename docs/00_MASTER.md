@@ -20,7 +20,7 @@ V1 is roadmap phases 0–2 only:
 2. Unified inbox for Meta (Instagram + Facebook comments and messages)
 3. AI comment moderation with automatic hide, human review, undo, and audit
 
-Do not implement Brand Brain, automation engine, extra channels, publisher, billing, or specialized AI workforce in V1. Draft-only reply suggestions (`suggest-reply` → human edit → `/reply`) are allowed per ADR-025; auto-post agents are not. Those later-phase specs exist so Phase 3+ does not invent a second architecture.
+Do not implement Brand Brain, automation engine, extra channels, publisher, billing, or specialized AI workforce in V1. Draft-only reply suggestions (`suggest-reply` → human edit → `/reply`) are allowed per ADR-025. Per-account **Modo automático** (opt-in auto public reply after moderation) is allowed per ADR-026; open-ended agent loops are not. Those later-phase specs exist so Phase 3+ does not invent a second architecture.
 
 The wedge:
 

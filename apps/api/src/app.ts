@@ -31,6 +31,7 @@ import {
   registerUser,
   requireMembership,
   resolveSession,
+  setChannelAutoReply,
   startMetaOAuth,
   suggestCommentReply,
   syncInstagramComments,
@@ -339,6 +340,30 @@ export async function buildApp(options: AppOptions) {
       actorId: session.user.id,
       channelId: params.id,
       tokenKey: ctx.tokenKey,
+    });
+    return { channel };
+  });
+
+  app.patch("/api/v1/channels/:id/auto-reply", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z
+      .object({
+        enabled: z.boolean(),
+        siblingIds: z.array(z.string().uuid()).max(8).optional(),
+      })
+      .parse(request.body);
+    const channel = await setChannelAutoReply(ctx, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      channelId: params.id,
+      enabled: body.enabled,
+      applyToSiblingIds: body.siblingIds,
     });
     return { channel };
   });

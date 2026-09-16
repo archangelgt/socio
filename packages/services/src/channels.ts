@@ -200,6 +200,7 @@ export async function listChannels(db: Database, organizationId: string) {
       status: row.status,
       brandId: row.brandId,
       pageId: pageId ?? null,
+      autoReplyEnabled: metadata.autoReplyEnabled === true,
     };
   });
 }

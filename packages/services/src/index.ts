@@ -38,6 +38,12 @@ export {
   listBrands,
   listChannels,
 } from "./channels";
+export {
+  maybeAutoReplyToComment,
+  readAutoReplyEnabled,
+  setChannelAutoReply,
+  withAutoReplyEnabled,
+} from "./auto-reply";
 export { completeMetaOAuth, startMetaOAuth } from "./meta";
 export { ingestWebhook, processInboundEvent } from "./inbound";
 export { syncInstagramComments, syncAllInstagramComments } from "./sync";

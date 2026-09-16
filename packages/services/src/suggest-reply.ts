@@ -73,8 +73,8 @@ export async function suggestCommentReply(
 
   await writeAudit(ctx.db, {
     organizationId: input.organizationId,
-    actorType: "user",
-    actorId: input.actorId,
+    actorType: input.actorId.startsWith("system:") ? "ai_policy" : "user",
+    actorId: input.actorId.startsWith("system:") ? undefined : input.actorId,
     eventType: "moderation.suggest_reply",
     entityType: "comment",
     entityId: comment.id,
@@ -82,6 +82,7 @@ export async function suggestCommentReply(
       provider: ctx.ai.provider,
       model: ctx.ai.model,
       textLength: text.length,
+      auto: input.actorId.startsWith("system:"),
     },
   });
 

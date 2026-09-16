@@ -34,6 +34,7 @@ import type { InboxListFilters } from "./account-filter";
 import { resolveInboxAccountIds } from "./account-filter";
 import { getChannelAdapter } from "./adapters";
 import { writeAudit } from "./audit";
+import { maybeAutoReplyToComment } from "./auto-reply";
 import type { ServiceContext } from "./context";
 import { AppError } from "./errors";
 import {
@@ -121,6 +122,10 @@ async function failModeration(
     entityType: "comment",
     entityId: comment.id,
     metadata: { error: publicProviderError(error) },
+  });
+  await maybeAutoReplyToComment(ctx, {
+    organizationId: comment.organizationId,
+    commentId: comment.id,
   });
 }
 
@@ -295,6 +300,11 @@ export async function processModeration(
       source: "policy",
       actionType: "hide",
       provider: account?.provider ?? "mock",
+    });
+  } else {
+    await maybeAutoReplyToComment(ctx, {
+      organizationId: comment.organizationId,
+      commentId: comment.id,
     });
   }
 }

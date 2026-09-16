@@ -82,8 +82,25 @@ export const api = {
         status: string;
         brandId: string;
         pageId: string | null;
+        autoReplyEnabled: boolean;
       }[];
     }>("/api/v1/channels", { organizationId }),
+  setChannelAutoReply: (
+    organizationId: string,
+    channelId: string,
+    body: { enabled: boolean; siblingIds?: string[] },
+  ) =>
+    request<{
+      channel: {
+        id: string;
+        autoReplyEnabled: boolean;
+        updatedChannelIds: string[];
+      };
+    }>(`/api/v1/channels/${channelId}/auto-reply`, {
+      method: "PATCH",
+      organizationId,
+      body,
+    }),
   connectMock: (
     organizationId: string,
     body: { brandId: string; displayName: string; externalAccountId: string },
