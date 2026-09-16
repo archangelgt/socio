@@ -725,37 +725,38 @@ export type SyncedPageMessage = {
 type PageConversationsResponse = {
   data?: Array<{
     id: string;
-    participants?: {
-      data?: Array<{ id?: string; name?: string; username?: string }>;
-    };
   }>;
   paging?: { cursors?: { after?: string }; next?: string };
 };
 
-type ConversationMessagesResponse = {
-  data?: Array<{
-    id: string;
-    message?: string;
-    created_time?: string;
-    from?: {
-      id?: string;
-      name?: string;
-      username?: string;
-      email?: string;
-    };
-  }>;
-  paging?: { cursors?: { after?: string }; next?: string };
+type ConversationThreadResponse = {
+  participants?: {
+    data?: Array<{ id?: string; name?: string; username?: string }>;
+  };
+  messages?: {
+    data?: Array<{
+      id: string;
+      message?: string;
+      created_time?: string;
+      from?: {
+        id?: string;
+        name?: string;
+        username?: string;
+        email?: string;
+      };
+    }>;
+  };
 };
 
-/** Keep conversation list pages small; nested message expansions trigger Graph payload limits. */
-const CONVERSATION_PAGE_SIZE = 10;
-const DEFAULT_MAX_CONVERSATIONS = 20;
-const DEFAULT_MESSAGES_PER_CONVERSATION = 10;
+/** Keep conversation list pages tiny; Graph rejects large nested expansions. */
+const CONVERSATION_PAGE_SIZE = 5;
+const DEFAULT_MAX_CONVERSATIONS = 15;
+const DEFAULT_MESSAGES_PER_CONVERSATION = 5;
 
 /**
  * Pull recent Messenger / Instagram DM threads for a Facebook Page.
- * Lists conversations lightly, then fetches messages per thread to avoid
- * Graph "reduce the amount of data" errors from nested field expansions.
+ * Lists conversation ids only, then loads participants + messages per thread
+ * to avoid Graph "reduce the amount of data" / timeout errors.
  * Contact id matches webhook identity (non-page participant PSID/IGSID).
  */
 export async function listPageConversationMessages(
@@ -776,7 +777,7 @@ export async function listPageConversationMessages(
   const messagesPerConversation = Math.max(
     1,
     Math.min(
-      25,
+      15,
       input.messagesPerConversation ?? DEFAULT_MESSAGES_PER_CONVERSATION,
     ),
   );
@@ -798,8 +799,8 @@ export async function listPageConversationMessages(
       accessToken: input.accessToken,
       query: {
         platform: input.platform,
-        // Intentionally omit nested messages — fetch per thread below.
-        fields: "participants,updated_time",
+        // Absolute minimum list fields — anything nested can trip Graph limits.
+        fields: "id,updated_time",
         limit: String(pageLimit),
         after,
       },
@@ -815,7 +816,17 @@ export async function listPageConversationMessages(
       if (!thread.id) {
         continue;
       }
-      const participants = thread.participants?.data ?? [];
+
+      const detail = await graphRequest<ConversationThreadResponse>(config, {
+        method: "GET",
+        path: `/${thread.id}`,
+        accessToken: input.accessToken,
+        query: {
+          fields: `participants.limit(5){id,name,username},messages.limit(${messagesPerConversation}){id,message,from{id,name,username},created_time}`,
+        },
+      });
+
+      const participants = detail.participants?.data ?? [];
       const contact =
         participants.find((person) => person.id && !selfIds.has(person.id)) ??
         participants[0];
@@ -825,20 +836,7 @@ export async function listPageConversationMessages(
       }
       const contactDisplayName = contact.username ?? contact.name;
 
-      const messagePage = await graphRequest<ConversationMessagesResponse>(
-        config,
-        {
-          method: "GET",
-          path: `/${thread.id}/messages`,
-          accessToken: input.accessToken,
-          query: {
-            fields: "id,message,from,created_time",
-            limit: String(messagesPerConversation),
-          },
-        },
-      );
-
-      for (const message of messagePage.data ?? []) {
+      for (const message of detail.messages?.data ?? []) {
         if (!message.id) {
           continue;
         }

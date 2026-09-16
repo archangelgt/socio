@@ -4,6 +4,7 @@ export {
   ChannelProviderError,
   isGraphPayloadTooLarge,
   isInstagramDmAccessDisabled,
+  isInstagramMessagingAdvancedAccessRequired,
   type ProviderFailureCode,
 } from "./errors";
 export {

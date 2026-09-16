@@ -30,7 +30,19 @@ export function isInstagramDmAccessDisabled(message: string): boolean {
 }
 
 export function isGraphPayloadTooLarge(message: string): boolean {
-  return /reduce the amount of data you're asking for/i.test(message);
+  return /reduce the amount of data you['’]?re asking for/i.test(message);
+}
+
+/** Standard Access cannot list many IG DM threads (Graph subcode 2534084). */
+export function isInstagramMessagingAdvancedAccessRequired(
+  message: string,
+): boolean {
+  return (
+    /advanced access to instagram_manage_messages/i.test(message) ||
+    /too many conversations with users who do not have a role/i.test(message) ||
+    (/(query has timed out|request timed out)/i.test(message) &&
+      /role on app/i.test(message))
+  );
 }
 
 export function mapGraphError(
@@ -45,7 +57,8 @@ export function mapGraphError(
     status === 403 ||
     graphCode === 10 ||
     graphCode === 200 ||
-    isInstagramDmAccessDisabled(message)
+    isInstagramDmAccessDisabled(message) ||
+    isInstagramMessagingAdvancedAccessRequired(message)
   ) {
     return new ChannelProviderError("forbidden", message, status);
   }
@@ -63,8 +76,18 @@ export function mapGraphError(
   if (status === 400 || graphCode === 100) {
     return new ChannelProviderError("validation_error", message, status);
   }
-  if (status >= 500) {
+  if (status >= 500 || graphCode === 1 || graphCode === -2) {
+    // Graph often returns code 1 / -2 for oversized or timed-out IG conversation queries.
+    if (
+      isGraphPayloadTooLarge(message) ||
+      isInstagramMessagingAdvancedAccessRequired(message)
+    ) {
+      return new ChannelProviderError("forbidden", message, status);
+    }
     return new ChannelProviderError("transient", message, status);
+  }
+  if (isGraphPayloadTooLarge(message)) {
+    return new ChannelProviderError("validation_error", message, status);
   }
   return new ChannelProviderError("unknown", message, status);
 }

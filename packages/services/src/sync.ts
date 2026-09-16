@@ -3,6 +3,7 @@ import {
   type MetaPage,
   isGraphPayloadTooLarge,
   isInstagramDmAccessDisabled,
+  isInstagramMessagingAdvancedAccessRequired,
   listInstagramMediaComments,
   listPageConversationMessages,
   subscribeMetaPage,
@@ -192,6 +193,36 @@ function instagramDmAccessHelp(accountLabel: string): string {
   return `${accountLabel}: Instagram blocked DM API access. On the Instagram app: Settings → Messages and story replies → Message controls → Connected tools → turn ON “Allow access to messages”, then Sync again.`;
 }
 
+function instagramAdvancedAccessHelp(accountLabel: string): string {
+  return `${accountLabel}: Meta needs Advanced Access for instagram_manage_messages to list existing Instagram DMs (too many threads outside app roles). New DMs still arrive via webhook; request Advanced Access in Meta App Review, or use Messenger sync on the linked Page.`;
+}
+
+function resolvePageAccessToken(
+  account: typeof socialAccounts.$inferSelect,
+  accounts: Array<typeof socialAccounts.$inferSelect>,
+  tokenKey: string,
+  accountToken: string,
+): string {
+  if (account.provider !== "instagram") {
+    return accountToken;
+  }
+  const pageId = pageIdFromMetadata(account.metadataJson) ?? undefined;
+  if (!pageId) {
+    return accountToken;
+  }
+  const pageAccount = accounts.find(
+    (row) =>
+      row.provider === "facebook" &&
+      row.status === "active" &&
+      (row.externalAccountId === pageId ||
+        pageIdFromMetadata(row.metadataJson) === pageId),
+  );
+  if (!pageAccount) {
+    return accountToken;
+  }
+  return decryptSecret(pageAccount.accessTokenEncrypted, tokenKey);
+}
+
 export async function syncMetaMessages(
   ctx: ServiceContext,
   organizationId: string,
@@ -220,11 +251,11 @@ export async function syncMetaMessages(
   const warnings: string[] = [];
 
   for (const account of accounts) {
-    const accessToken = decryptSecret(
+    const accountToken = decryptSecret(
       account.accessTokenEncrypted,
       ctx.tokenKey,
     );
-    await refreshPageWebhookSubscription(ctx, account, accessToken);
+    await refreshPageWebhookSubscription(ctx, account, accountToken);
 
     const pageId =
       pageIdFromMetadata(account.metadataJson) ??
@@ -238,10 +269,20 @@ export async function syncMetaMessages(
       continue;
     }
 
+    // Conversations edge requires a Page token (Facebook Login path).
+    const accessToken = resolvePageAccessToken(
+      account,
+      accounts,
+      ctx.tokenKey,
+      accountToken,
+    );
+
     const platform =
       account.provider === "instagram" ? "instagram" : "messenger";
     const selfIds =
       account.provider === "instagram" ? [account.externalAccountId] : [];
+    const maxConversations = account.provider === "instagram" ? 10 : 15;
+    const messagesPerConversation = account.provider === "instagram" ? 5 : 8;
 
     let messages: Awaited<ReturnType<typeof listPageConversationMessages>>;
     try {
@@ -250,22 +291,29 @@ export async function syncMetaMessages(
         pageId,
         platform,
         selfIds,
-        maxConversations: 20,
-        messagesPerConversation: 10,
+        maxConversations,
+        messagesPerConversation,
       });
     } catch (error) {
       if (
         error instanceof ChannelProviderError &&
         (isInstagramDmAccessDisabled(error.message) ||
+          isInstagramMessagingAdvancedAccessRequired(error.message) ||
           isGraphPayloadTooLarge(error.message) ||
           error.code === "forbidden")
       ) {
+        const advanced =
+          isInstagramMessagingAdvancedAccessRequired(error.message) ||
+          (account.provider === "instagram" &&
+            isGraphPayloadTooLarge(error.message));
         warnings.push(
           isInstagramDmAccessDisabled(error.message)
             ? instagramDmAccessHelp(account.displayName)
-            : isGraphPayloadTooLarge(error.message)
-              ? `${account.displayName}: Meta rejected the DM sync payload as too large. Try Sync again.`
-              : `${account.displayName}: Meta blocked messaging (${error.message})`,
+            : advanced
+              ? instagramAdvancedAccessHelp(account.displayName)
+              : isGraphPayloadTooLarge(error.message)
+                ? `${account.displayName}: Meta rejected the DM sync payload as too large. Try Sync again.`
+                : `${account.displayName}: Meta blocked messaging (${error.message})`,
         );
         continue;
       }

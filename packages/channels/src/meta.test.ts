@@ -1,6 +1,10 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { ChannelProviderError, isGraphPayloadTooLarge } from "./errors";
+import {
+  ChannelProviderError,
+  isGraphPayloadTooLarge,
+  isInstagramMessagingAdvancedAccessRequired,
+} from "./errors";
 import { MetaChannelAdapter } from "./meta";
 import {
   hideCandidateIds,
@@ -577,12 +581,26 @@ describe("MetaChannelAdapter", () => {
 });
 
 describe("listPageConversationMessages", () => {
-  it("lists conversations lightly then fetches messages per thread", async () => {
+  it("lists conversation ids then loads each thread detail", async () => {
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
       const href = String(input);
-      if (href.includes("/messages")) {
+      if (href.includes("/conversations")) {
         return new Response(
           JSON.stringify({
+            data: [{ id: "t1", updated_time: "2026-09-16T12:00:00+0000" }],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          participants: {
+            data: [
+              { id: "page-1", name: "Page" },
+              { id: "user-1", username: "andy" },
+            ],
+          },
+          messages: {
             data: [
               {
                 id: "m1",
@@ -591,23 +609,7 @@ describe("listPageConversationMessages", () => {
                 from: { id: "user-1", username: "andy" },
               },
             ],
-          }),
-          { status: 200 },
-        );
-      }
-      return new Response(
-        JSON.stringify({
-          data: [
-            {
-              id: "t1",
-              participants: {
-                data: [
-                  { id: "page-1", name: "Page" },
-                  { id: "user-1", username: "andy" },
-                ],
-              },
-            },
-          ],
+          },
         }),
         { status: 200 },
       );
@@ -639,18 +641,25 @@ describe("listPageConversationMessages", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const firstUrl = String(fetchImpl.mock.calls[0]?.[0]);
     expect(firstUrl).toContain("/page-1/conversations");
-    expect(firstUrl).toContain("fields=participants%2Cupdated_time");
-    expect(firstUrl).not.toContain("messages.limit");
+    expect(firstUrl).toContain("fields=id%2Cupdated_time");
+    expect(firstUrl).not.toContain("messages");
     const secondUrl = String(fetchImpl.mock.calls[1]?.[0]);
-    expect(secondUrl).toContain("/t1/messages");
+    expect(secondUrl).toContain("/t1?");
+    expect(secondUrl).toContain("participants.limit");
+    expect(secondUrl).toContain("messages.limit");
   });
 
-  it("detects Graph payload-too-large errors", () => {
+  it("detects Graph payload-too-large and advanced-access errors", () => {
     expect(
       isGraphPayloadTooLarge(
         "Please reduce the amount of data you're asking for, then retry your request",
       ),
     ).toBe(true);
     expect(isGraphPayloadTooLarge("rate limit exceeded")).toBe(false);
+    expect(
+      isInstagramMessagingAdvancedAccessRequired(
+        "Your query has timed out since you have too many conversations with users who do not have a role on app. Please request for advanced access to instagram_manage_messages permission",
+      ),
+    ).toBe(true);
   });
 });
