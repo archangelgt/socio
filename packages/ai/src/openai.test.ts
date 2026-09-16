@@ -112,6 +112,34 @@ describe("OpenAICompatibleProvider", () => {
       ai.moderate({ organizationId: "org-1", text: "hola" }),
     ).rejects.toThrow(/refused/);
   });
+
+  it("suggests a draft public reply", async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        choices: [{ message: { content: '"¡Gracias por escribirnos!"' } }],
+      }),
+    );
+    const ai = new OpenAICompatibleProvider({
+      apiKey: "sk-test",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const suggestion = await ai.suggestReply({
+      organizationId: "org-1",
+      commentText: "Me encanta",
+      brandName: "Acme",
+    });
+    expect(suggestion.text).toBe("¡Gracias por escribirnos!");
+    const call = fetchImpl.mock.calls[0] as unknown as [
+      string,
+      { body: string },
+    ];
+    const body = JSON.parse(call[1].body) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(body.messages[0]?.role).toBe("system");
+    expect(body.messages[1]?.content).toContain("Me encanta");
+    expect(body.messages[1]?.content).toContain("Acme");
+  });
 });
 
 describe("AnthropicProvider", () => {
@@ -186,5 +214,37 @@ describe("AnthropicProvider", () => {
     await expect(
       ai.moderate({ organizationId: "org-1", text: "hola" }),
     ).rejects.toThrow(/empty moderation result/);
+  });
+
+  it("suggests a draft public reply", async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        content: [{ type: "text", text: "Gracias por tu mensaje." }],
+      }),
+    );
+    const ai = new AnthropicProvider({
+      apiKey: "sk-ant-test",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const suggestion = await ai.suggestReply({
+      organizationId: "org-1",
+      commentText: "Hola equipo",
+      brandName: "Seraph",
+      authorDisplayName: "yalodde",
+    });
+    expect(suggestion.text).toBe("Gracias por tu mensaje.");
+    const call = fetchImpl.mock.calls[0] as unknown as [
+      string,
+      { body: string },
+    ];
+    const body = JSON.parse(call[1].body) as {
+      system: string;
+      messages: Array<{ content: string }>;
+      max_tokens: number;
+    };
+    expect(body.system).toContain("public replies");
+    expect(body.messages[0]?.content).toContain("Hola equipo");
+    expect(body.messages[0]?.content).toContain("Seraph");
+    expect(body.max_tokens).toBe(300);
   });
 });

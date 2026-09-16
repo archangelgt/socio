@@ -74,6 +74,7 @@ POST  /api/v1/conversations/:id/messages
 GET   /api/v1/comments
 POST  /api/v1/comments/sync
 POST  /api/v1/comments/:id/reply
+POST  /api/v1/comments/:id/suggest-reply
 GET   /api/v1/comments/:id
 GET   /api/v1/posts/:id
 GET   /api/v1/posts/:id/preview
@@ -90,6 +91,8 @@ List items include `socialAccountId`, `accountDisplayName`, `provider`, `brandId
 Filtering by `socialAccountId` includes Meta Page + linked Instagram siblings that share the same `metadata.pageId` (so CADI Facebook and `@cadi.gt` are one area).
 
 `POST /api/v1/comments/:id/reply` body: `{ "text": string }` (1–2000 chars). Human reply only; queues outbound `reply` via the channel adapter. Not an AI suggested-reply endpoint.
+
+`POST /api/v1/comments/:id/suggest-reply` returns `{ suggestion: { text, provider, model } }`. Draft only — never posts until the human sends `/reply`.
 
 ## Tags
 
@@ -154,4 +157,4 @@ Prefer identifying the account from the payload after signature check. `:account
 - `/api/v1/automations`
 - `/api/v1/analytics` (beyond thin moderation metrics)
 
-Phase 4 may add `POST /api/v1/comments/:id/suggested-reply` as an application operation (tenant + RBAC + usage), never as a raw provider proxy.
+Phase 4 may deepen reply assistance (tone, Brand Brain context, usage metering). V1 already has draft-only `POST /api/v1/comments/:id/suggest-reply` (ADR-025).

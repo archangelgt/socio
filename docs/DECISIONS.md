@@ -165,3 +165,9 @@ Decision: Instagram and Facebook share `MetaChannelAdapter` (`provider` on store
 
 Reason: one Meta app, one webhook URL, ADR-021 uniqueness still applies per IG user id / Page id.
 
+## ADR-025 — Draft-only reply suggestions in V1
+
+Decision: V1 may expose `AIProvider.suggestReply` and `POST /api/v1/comments/:id/suggest-reply` as a **draft** helper only. The UI fills the composer; the human must edit and send via `/reply`. No auto-post, no agent loop, no Brand Brain.
+
+Reason: operators asked for AI-assisted public replies without waiting for Phase 4. Keeping the draft gate preserves ADR-005 (AI never authorizes outbound actions).
+

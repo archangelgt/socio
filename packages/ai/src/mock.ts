@@ -9,6 +9,7 @@ import type {
   EmbeddingRequest,
   EmbeddingResponse,
   ModerationRequest,
+  SuggestReplyRequest,
 } from "./types";
 
 const ABUSE_WORDS = ["hate", "kill", "scam", "phishing", "spam"];
@@ -54,5 +55,12 @@ export class MockAIProvider implements AIProvider {
 
   async embed(_input: EmbeddingRequest): Promise<EmbeddingResponse> {
     return { embedding: [0, 0, 0] };
+  }
+
+  async suggestReply(input: SuggestReplyRequest): Promise<AIResponse> {
+    const brand = input.brandName?.trim() || "nosotros";
+    return {
+      text: `¡Gracias por escribirnos! En ${brand} leemos cada comentario. ¿En qué te podemos ayudar?`,
+    };
   }
 }

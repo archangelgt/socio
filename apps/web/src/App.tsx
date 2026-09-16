@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Mascot } from "./Mascot";
 import { type Session, api } from "./api";
 import { MarketingSite } from "./marketing/MarketingSite";
@@ -438,6 +438,22 @@ function AccountBadge({
   );
 }
 
+function formatRationale(rationale: string | null | undefined): string | null {
+  if (!rationale) {
+    return null;
+  }
+  if (
+    /api key|http 401|openai http|anthropic http|ai unavailable/i.test(
+      rationale,
+    )
+  ) {
+    return "AI could not classify this comment. Review it manually or sync again.";
+  }
+  return rationale
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function ActionButtons({
   status,
   onAllow,
@@ -445,11 +461,6 @@ function ActionButtons({
   onRestore,
   onReply,
   replyOpen,
-  replyText,
-  onReplyText,
-  onSendReply,
-  onCancelReply,
-  replyBusy,
 }: {
   status: DisplayStatus;
   onAllow: () => void;
@@ -457,76 +468,107 @@ function ActionButtons({
   onRestore: () => void;
   onReply: () => void;
   replyOpen: boolean;
-  replyText: string;
-  onReplyText: (value: string) => void;
-  onSendReply: () => void;
-  onCancelReply: () => void;
-  replyBusy: boolean;
 }) {
   const hidden = status === "hidden";
   const allowed = status === "allowed";
   return (
-    <div className="action-stack">
-      <div className="actions" aria-label="Moderation actions">
+    <div className="actions" aria-label="Moderation actions">
+      <button
+        type="button"
+        className={allowed ? "is-current is-allow" : ""}
+        aria-pressed={allowed}
+        disabled={allowed}
+        onClick={onAllow}
+      >
+        Allow
+      </button>
+      <button
+        type="button"
+        className={hidden ? "is-current is-hide" : ""}
+        aria-pressed={hidden}
+        disabled={hidden}
+        onClick={onHide}
+      >
+        Hide
+      </button>
+      <button
+        type="button"
+        className={hidden ? "is-restore" : ""}
+        disabled={!hidden}
+        onClick={onRestore}
+      >
+        Restore
+      </button>
+      <button
+        type="button"
+        className={replyOpen ? "is-reply is-current" : "is-reply"}
+        aria-pressed={replyOpen}
+        onClick={onReply}
+      >
+        Reply
+      </button>
+    </div>
+  );
+}
+
+function ReplyComposer({
+  replyText,
+  onReplyText,
+  onSendReply,
+  onCancelReply,
+  onSuggest,
+  replyBusy,
+  suggestBusy,
+}: {
+  replyText: string;
+  onReplyText: (value: string) => void;
+  onSendReply: () => void;
+  onCancelReply: () => void;
+  onSuggest: () => void;
+  replyBusy: boolean;
+  suggestBusy: boolean;
+}) {
+  return (
+    <div className="reply-panel">
+      <div className="reply-panel-copy">
+        <strong>Public reply</strong>
+        <span className="muted">
+          Suggest with AI, edit if needed, then send.
+        </span>
+      </div>
+      <textarea
+        value={replyText}
+        onChange={(event) => onReplyText(event.target.value)}
+        placeholder="Write a public reply…"
+        rows={3}
+        maxLength={2000}
+        disabled={replyBusy || suggestBusy}
+      />
+      <div className="reply-panel-actions">
         <button
           type="button"
-          className={allowed ? "is-current is-allow" : ""}
-          aria-pressed={allowed}
-          disabled={allowed}
-          onClick={onAllow}
+          className="suggest"
+          disabled={replyBusy || suggestBusy}
+          onClick={onSuggest}
         >
-          Allow
+          {suggestBusy ? "Suggesting…" : "Suggest with AI"}
         </button>
         <button
           type="button"
-          className={hidden ? "is-current is-hide" : ""}
-          aria-pressed={hidden}
-          disabled={hidden}
-          onClick={onHide}
+          disabled={replyBusy || suggestBusy || !replyText.trim()}
+          onClick={onSendReply}
         >
-          Hide
+          {replyBusy ? "Sending…" : "Send reply"}
         </button>
         <button
           type="button"
-          className={hidden ? "is-restore" : ""}
-          disabled={!hidden}
-          onClick={onRestore}
+          className="ghost"
+          disabled={replyBusy || suggestBusy}
+          onClick={onCancelReply}
         >
-          Restore
-        </button>
-        <button type="button" className="is-reply" onClick={onReply}>
-          Reply
+          Cancel
         </button>
       </div>
-      {replyOpen ? (
-        <div className="reply-composer">
-          <textarea
-            value={replyText}
-            onChange={(event) => onReplyText(event.target.value)}
-            placeholder="Write a public reply…"
-            rows={3}
-            maxLength={2000}
-            disabled={replyBusy}
-          />
-          <div className="button-row">
-            <button
-              type="button"
-              disabled={replyBusy || !replyText.trim()}
-              onClick={onSendReply}
-            >
-              {replyBusy ? "Sending…" : "Send reply"}
-            </button>
-            <button
-              type="button"
-              className="ghost"
-              disabled={replyBusy}
-              onClick={onCancelReply}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -874,6 +916,7 @@ function ModerationPage({
   const [replyFor, setReplyFor] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replyBusy, setReplyBusy] = useState(false);
+  const [suggestBusy, setSuggestBusy] = useState(false);
   const groups = groupChannels(channels);
 
   const reload = useCallback(() => {
@@ -965,96 +1008,126 @@ function ModerationPage({
             <tbody>
               {items.map((item) => {
                 const status = displayStatus(item);
+                const rationale = formatRationale(item.rationale);
+                const replyOpen = replyFor === item.commentId;
                 return (
-                  <tr key={item.decisionId}>
-                    <td>
-                      <div className="comment-cell">
-                        <AuthorAvatar name={item.authorDisplayName} />
-                        <div>
-                          <strong>{item.authorDisplayName ?? "Unknown"}</strong>
-                          <div>{item.body}</div>
-                          {item.rationale ? (
-                            <div className="muted">{item.rationale}</div>
-                          ) : null}
+                  <Fragment key={item.decisionId}>
+                    <tr className={replyOpen ? "is-replying" : undefined}>
+                      <td>
+                        <div className="comment-cell">
+                          <AuthorAvatar name={item.authorDisplayName} />
+                          <div>
+                            <strong>
+                              {item.authorDisplayName ?? "Unknown"}
+                            </strong>
+                            <div>{item.body}</div>
+                            {rationale ? (
+                              <div className="ai-note">{rationale}</div>
+                            ) : null}
+                          </div>
+                          <PostThumb
+                            postId={item.postId}
+                            permalink={item.postPermalink}
+                          />
                         </div>
-                        <PostThumb
-                          postId={item.postId}
-                          permalink={item.postPermalink}
+                      </td>
+                      <td>
+                        <AccountBadge
+                          accountDisplayName={item.accountDisplayName}
+                          brandName={item.brandName}
+                          provider={item.provider}
                         />
-                      </div>
-                    </td>
-                    <td>
-                      <AccountBadge
-                        accountDisplayName={item.accountDisplayName}
-                        brandName={item.brandName}
-                        provider={item.provider}
-                      />
-                    </td>
-                    <td className="muted when">{formatWhen(item.createdAt)}</td>
-                    <td>
-                      <StatusBadge status={status} />
-                    </td>
-                    <td>{item.severity ?? "—"}</td>
-                    <td>
-                      {item.confidence !== null
-                        ? `${Math.round(item.confidence * 100)}%`
-                        : "—"}
-                    </td>
-                    <td>
-                      <ActionButtons
-                        status={status}
-                        onAllow={() => {
-                          void api
-                            .allow(organizationId, item.decisionId)
-                            .then(reload)
-                            .catch((err: Error) => setError(err.message));
-                        }}
-                        onHide={() => {
-                          void api
-                            .hide(organizationId, item.decisionId)
-                            .then(reload)
-                            .catch((err: Error) => setError(err.message));
-                        }}
-                        onRestore={() => {
-                          void api
-                            .restore(organizationId, item.decisionId)
-                            .then(reload)
-                            .catch((err: Error) => setError(err.message));
-                        }}
-                        onReply={() => {
-                          setReplyFor((current) =>
-                            current === item.commentId ? null : item.commentId,
-                          );
-                          setReplyText("");
-                        }}
-                        replyOpen={replyFor === item.commentId}
-                        replyText={replyText}
-                        onReplyText={setReplyText}
-                        replyBusy={replyBusy}
-                        onCancelReply={() => {
-                          setReplyFor(null);
-                          setReplyText("");
-                        }}
-                        onSendReply={() => {
-                          setReplyBusy(true);
-                          void api
-                            .replyToComment(
-                              organizationId,
-                              item.commentId,
-                              replyText,
-                            )
-                            .then(() => {
+                      </td>
+                      <td className="muted when">
+                        {formatWhen(item.createdAt)}
+                      </td>
+                      <td>
+                        <StatusBadge status={status} />
+                      </td>
+                      <td>{item.severity ?? "—"}</td>
+                      <td>
+                        {item.confidence !== null
+                          ? `${Math.round(item.confidence * 100)}%`
+                          : "—"}
+                      </td>
+                      <td>
+                        <ActionButtons
+                          status={status}
+                          onAllow={() => {
+                            void api
+                              .allow(organizationId, item.decisionId)
+                              .then(reload)
+                              .catch((err: Error) => setError(err.message));
+                          }}
+                          onHide={() => {
+                            void api
+                              .hide(organizationId, item.decisionId)
+                              .then(reload)
+                              .catch((err: Error) => setError(err.message));
+                          }}
+                          onRestore={() => {
+                            void api
+                              .restore(organizationId, item.decisionId)
+                              .then(reload)
+                              .catch((err: Error) => setError(err.message));
+                          }}
+                          replyOpen={replyOpen}
+                          onReply={() => {
+                            setReplyFor((current) =>
+                              current === item.commentId
+                                ? null
+                                : item.commentId,
+                            );
+                            setReplyText("");
+                          }}
+                        />
+                      </td>
+                    </tr>
+                    {replyOpen ? (
+                      <tr className="reply-row">
+                        <td colSpan={7}>
+                          <ReplyComposer
+                            replyText={replyText}
+                            onReplyText={setReplyText}
+                            replyBusy={replyBusy}
+                            suggestBusy={suggestBusy}
+                            onCancelReply={() => {
                               setReplyFor(null);
                               setReplyText("");
-                              setError(null);
-                              reload();
-                            })
-                            .catch((err: Error) => setError(err.message))
-                            .finally(() => setReplyBusy(false));
-                        }}
-                      />
-                    </td>
-                  </tr>
+                            }}
+                            onSuggest={() => {
+                              setSuggestBusy(true);
+                              void api
+                                .suggestReply(organizationId, item.commentId)
+                                .then((data) => {
+                                  setReplyText(data.suggestion.text);
+                                  setError(null);
+                                })
+                                .catch((err: Error) => setError(err.message))
+                                .finally(() => setSuggestBusy(false));
+                            }}
+                            onSendReply={() => {
+                              setReplyBusy(true);
+                              void api
+                                .replyToComment(
+                                  organizationId,
+                                  item.commentId,
+                                  replyText,
+                                )
+                                .then(() => {
+                                  setReplyFor(null);
+                                  setReplyText("");
+                                  setError(null);
+                                  reload();
+                                })
+                                .catch((err: Error) => setError(err.message))
+                                .finally(() => setReplyBusy(false));
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 );
               })}
             </tbody>

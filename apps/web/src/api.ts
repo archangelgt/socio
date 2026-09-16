@@ -158,6 +158,13 @@ export const api = {
       organizationId,
       body: { text },
     }),
+  suggestReply: (organizationId: string, commentId: string) =>
+    request<{
+      suggestion: { text: string; provider: string; model: string };
+    }>(`/api/v1/comments/${commentId}/suggest-reply`, {
+      method: "POST",
+      organizationId,
+    }),
   conversations: (
     organizationId: string,
     filters?: { socialAccountId?: string; brandId?: string },

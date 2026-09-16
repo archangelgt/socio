@@ -27,6 +27,14 @@ export type ModerationRequest = {
   postText?: string;
 };
 
+export type SuggestReplyRequest = {
+  organizationId: string;
+  commentText: string;
+  brandName?: string;
+  postText?: string;
+  authorDisplayName?: string;
+};
+
 export type EmbeddingRequest = {
   organizationId: string;
   text: string;
@@ -44,5 +52,6 @@ export interface AIProvider {
   generate(input: AIRequest): Promise<AIResponse>;
   classify(input: ClassificationRequest): Promise<ClassificationResponse>;
   moderate(input: ModerationRequest): Promise<ModerationResult>;
+  suggestReply(input: SuggestReplyRequest): Promise<AIResponse>;
   embed(input: EmbeddingRequest): Promise<EmbeddingResponse>;
 }

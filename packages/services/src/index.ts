@@ -48,6 +48,7 @@ export {
   processModeration,
 } from "./moderate";
 export { processOutboundAction } from "./outbound";
+export { suggestCommentReply } from "./suggest-reply";
 export {
   getPost,
   listComments,

@@ -723,43 +723,190 @@ th {
   color: var(--indigo);
 }
 
-.action-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.55rem;
-  min-width: 11rem;
+.actions button.is-reply.is-current {
+  background: var(--white);
+  color: var(--indigo);
+  box-shadow: 0 1px 4px rgb(11 15 42 / 8%);
 }
 
-.reply-composer {
-  width: min(22rem, 70vw);
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
+.ai-note {
+  margin-top: 0.4rem;
+  color: var(--gray);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  max-width: 34rem;
 }
 
-.reply-composer textarea {
+tr.is-replying td {
+  border-bottom-color: transparent;
+  background: color-mix(in srgb, var(--light) 55%, white);
+}
+
+.reply-row td {
+  padding: 0 0.8rem 0.95rem;
+  background: color-mix(in srgb, var(--light) 55%, white);
+  border-bottom: 1px solid #eef2f7;
+}
+
+.reply-panel {
+  display: grid;
+  gap: 0.7rem;
+  max-width: 44rem;
+  padding: 0.9rem 1rem 1rem;
+  border: 1px solid #e5ebf3;
+  border-radius: 14px;
+  background: var(--white);
+  box-shadow: 0 6px 18px rgb(11 15 42 / 4%);
+}
+
+.reply-panel-copy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.65rem;
+  align-items: baseline;
+}
+
+.reply-panel-copy strong {
+  font-size: 0.9rem;
+  letter-spacing: -0.01em;
+}
+
+.reply-panel textarea {
   width: 100%;
   border: 1px solid #d7dee8;
   border-radius: 12px;
-  padding: 0.65rem 0.75rem;
+  padding: 0.7rem 0.85rem;
   font: inherit;
   resize: vertical;
-  min-height: 4.5rem;
+  min-height: 4.25rem;
+  line-height: 1.45;
+  background: #fbfcfe;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s
+    ease;
 }
 
-.reply-composer .ghost {
+.reply-panel textarea:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--indigo) 45%, #d7dee8);
+  background: var(--white);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 14%, transparent);
+}
+
+.reply-panel textarea:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.reply-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.reply-panel-actions button {
+  margin: 0;
+  min-height: 2.25rem;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.84rem;
+}
+
+.reply-panel-actions .suggest {
+  background: color-mix(in srgb, var(--indigo) 10%, white);
+  color: var(--indigo);
+  border: 1px solid color-mix(in srgb, var(--indigo) 28%, #d7dee8);
+  box-shadow: none;
+}
+
+.reply-panel-actions .suggest:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--indigo) 16%, white);
+}
+
+.reply-panel-actions .ghost {
   border: 1px solid transparent;
   background: transparent;
   color: var(--gray);
   box-shadow: none;
 }
 
+.reply-panel-actions .ghost:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--light);
+}
+
 .account-switcher {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
-  margin: 0.85rem 0 0.35rem;
+  gap: 0.4rem;
+  margin: 0.75rem 0 0.65rem;
+}
+
+.moderation-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.moderation-toolbar .button-row {
+  margin: 0;
+}
+
+.moderation-toolbar .button-row button {
+  padding: 0.55rem 1rem;
+  font-size: 0.86rem;
+}
+
+.panel table {
+  table-layout: fixed;
+}
+
+.panel table th:nth-child(1),
+.panel table td:nth-child(1) {
+  width: 36%;
+}
+
+.panel table th:nth-child(2),
+.panel table td:nth-child(2) {
+  width: 14%;
+}
+
+.panel table th:nth-child(3),
+.panel table td:nth-child(3) {
+  width: 11%;
+}
+
+.panel table th:nth-child(4),
+.panel table td:nth-child(4),
+.panel table th:nth-child(5),
+.panel table td:nth-child(5),
+.panel table th:nth-child(6),
+.panel table td:nth-child(6) {
+  width: 8.5%;
+}
+
+.panel table th:nth-child(7),
+.panel table td:nth-child(7) {
+  width: 13.5rem;
+}
+
+.panel table td:nth-child(5),
+.panel table td:nth-child(6) {
+  color: var(--gray);
+  font-variant-numeric: tabular-nums;
+}
+
+.comment-cell {
+  align-items: flex-start;
+}
+
+.comment-cell strong {
+  display: block;
+  margin-bottom: 0.15rem;
+  font-size: 0.9rem;
+  letter-spacing: -0.01em;
 }
 
 .account-switcher button {

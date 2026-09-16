@@ -13,4 +13,5 @@ export type {
   EmbeddingRequest,
   EmbeddingResponse,
   ModerationRequest,
+  SuggestReplyRequest,
 } from "./types";

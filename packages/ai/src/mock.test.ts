@@ -16,4 +16,14 @@ describe("MockAIProvider", () => {
     expect(abuse.recommended_action).toBe("HIDE");
     expect(criticism.recommended_action).toBe("ALLOW");
   });
+
+  it("suggests a draft public reply", async () => {
+    const ai = new MockAIProvider();
+    const suggestion = await ai.suggestReply({
+      organizationId: "org-1",
+      commentText: "¿Cuándo llega el pedido?",
+      brandName: "Seraph",
+    });
+    expect(suggestion.text).toContain("Seraph");
+  });
 });

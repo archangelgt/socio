@@ -168,7 +168,7 @@ Must include:
 Must not include:
 
 - Brand Brain / RAG
-- AI reply suggestions
+- Auto-posted AI replies / agent loops (draft-only `suggest-reply` is allowed; see ADR-025)
 - automation engine
 - publisher
 - billing

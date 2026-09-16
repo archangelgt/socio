@@ -32,6 +32,7 @@ import {
   requireMembership,
   resolveSession,
   startMetaOAuth,
+  suggestCommentReply,
   syncInstagramComments,
 } from "@social-ai/services";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
@@ -429,6 +430,22 @@ export async function buildApp(options: AppOptions) {
       text: body.text,
     });
     return { ok: true };
+  });
+
+  app.post("/api/v1/comments/:id/suggest-reply", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const suggestion = await suggestCommentReply(ctx, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      commentId: params.id,
+    });
+    return { suggestion };
   });
 
   app.get("/api/v1/conversations", async (request) => {

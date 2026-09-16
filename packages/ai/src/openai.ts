@@ -5,6 +5,10 @@ import {
   MODERATION_SYSTEM_PROMPT,
   buildModerationUserPrompt,
 } from "./moderation-contract";
+import {
+  SUGGEST_REPLY_SYSTEM_PROMPT,
+  buildSuggestReplyUserPrompt,
+} from "./suggest-reply";
 import type {
   AIProvider,
   AIRequest,
@@ -14,6 +18,7 @@ import type {
   EmbeddingRequest,
   EmbeddingResponse,
   ModerationRequest,
+  SuggestReplyRequest,
 } from "./types";
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
@@ -124,5 +129,46 @@ export class OpenAICompatibleProvider implements AIProvider {
       ...(parsed as ModerationResult),
       taxonomy_version: TAXONOMY_VERSION,
     };
+  }
+
+  async suggestReply(input: SuggestReplyRequest): Promise<AIResponse> {
+    const response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${this.apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: this.model,
+        temperature: 0.4,
+        messages: [
+          { role: "system", content: SUGGEST_REPLY_SYSTEM_PROMPT },
+          { role: "user", content: buildSuggestReplyUserPrompt(input) },
+        ],
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+
+    const body = (await response.json()) as ChatCompletionResponse & {
+      error?: { message?: string };
+    };
+    if (!response.ok) {
+      throw new AIProviderError(
+        body.error?.message
+          ? `OpenAI HTTP ${response.status}: ${body.error.message}`
+          : `OpenAI HTTP ${response.status}`,
+        response.status,
+      );
+    }
+
+    const content = body.choices?.[0]?.message?.content?.trim();
+    if (!content) {
+      throw new AIProviderError(
+        body.choices?.[0]?.message?.refusal ||
+          "OpenAI returned an empty reply suggestion.",
+      );
+    }
+
+    return { text: content.replace(/^["']|["']$/g, "").trim() };
   }
 }

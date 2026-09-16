@@ -5,6 +5,10 @@ import {
   MODERATION_SYSTEM_PROMPT,
   buildModerationUserPrompt,
 } from "./moderation-contract";
+import {
+  SUGGEST_REPLY_SYSTEM_PROMPT,
+  buildSuggestReplyUserPrompt,
+} from "./suggest-reply";
 import type {
   AIProvider,
   AIRequest,
@@ -14,6 +18,7 @@ import type {
   EmbeddingRequest,
   EmbeddingResponse,
   ModerationRequest,
+  SuggestReplyRequest,
 } from "./types";
 
 const DEFAULT_BASE_URL = "https://api.anthropic.com";
@@ -136,5 +141,55 @@ export class AnthropicProvider implements AIProvider {
       ...(parsed as ModerationResult),
       taxonomy_version: TAXONOMY_VERSION,
     };
+  }
+
+  async suggestReply(input: SuggestReplyRequest): Promise<AIResponse> {
+    const response = await this.fetchImpl(`${this.baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "x-api-key": this.apiKey,
+        "anthropic-version": ANTHROPIC_VERSION,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: this.model,
+        max_tokens: 300,
+        temperature: 0.4,
+        system: SUGGEST_REPLY_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: buildSuggestReplyUserPrompt(input),
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+
+    const body = (await response.json()) as AnthropicMessagesResponse;
+    if (!response.ok) {
+      throw new AIProviderError(
+        body.error?.message
+          ? `Anthropic HTTP ${response.status}: ${body.error.message}`
+          : `Anthropic HTTP ${response.status}`,
+        response.status,
+      );
+    }
+
+    const text = body.content
+      ?.filter(
+        (block) => block.type === "text" && typeof block.text === "string",
+      )
+      .map((block) => block.text)
+      .join("")
+      .trim();
+
+    if (!text) {
+      throw new AIProviderError(
+        "Anthropic returned an empty reply suggestion.",
+      );
+    }
+
+    return { text: text.replace(/^["']|["']$/g, "").trim() };
   }
 }
