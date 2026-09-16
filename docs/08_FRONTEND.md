@@ -46,7 +46,7 @@ Pending review | Auto-hidden | Allowed
 
 Filters: channel, category, severity, confidence, status, date, brand, policy.
 
-Actions: Review, Allow, Hide, Restore.
+Actions: Review, Allow, Hide, Restore, Reply.
 
 ## Moderation detail
 

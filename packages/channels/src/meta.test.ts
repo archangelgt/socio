@@ -227,6 +227,59 @@ describe("MetaChannelAdapter", () => {
     expect(called).toContain("hide=true");
   });
 
+  it("replies to an Instagram comment via Graph", async () => {
+    const fetchImpl = vi.fn(async () => {
+      return new Response(JSON.stringify({ id: "reply-9" }), { status: 200 });
+    });
+    const adapter = new MetaChannelAdapter({
+      appSecret: APP_SECRET,
+      verifyToken: "verify-me",
+      graphVersion: "v21.0",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const result = await adapter.replyToComment({
+      organizationId: "org-1",
+      accountId: "17841",
+      externalCommentId: "c1",
+      accessToken: "page-token",
+      network: "instagram",
+      text: "Thanks!",
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      externalReplyId: "reply-9",
+      externalCommentId: "c1",
+    });
+    const called = JSON.stringify(fetchImpl.mock.calls);
+    expect(called).toContain("/v21.0/c1/replies");
+    expect(called).toContain("message=Thanks");
+  });
+
+  it("replies to a Facebook comment via Graph", async () => {
+    const fetchImpl = vi.fn(async () => {
+      return new Response(JSON.stringify({ id: "fb-reply-1" }), {
+        status: 200,
+      });
+    });
+    const adapter = new MetaChannelAdapter({
+      appSecret: APP_SECRET,
+      verifyToken: "verify-me",
+      graphVersion: "v21.0",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const result = await adapter.replyToComment({
+      organizationId: "org-1",
+      accountId: "page-1",
+      externalCommentId: "c-fb",
+      accessToken: "page-token",
+      network: "facebook",
+      text: "Noted",
+    });
+    expect(result.externalReplyId).toBe("fb-reply-1");
+    const called = JSON.stringify(fetchImpl.mock.calls);
+    expect(called).toContain("/v21.0/c-fb/comments");
+  });
+
   it("resolves a Graph comment id when the webhook id cannot be hidden", async () => {
     const fetchImpl = vi.fn(async (url: URL, init?: RequestInit) => {
       const href = String(url);

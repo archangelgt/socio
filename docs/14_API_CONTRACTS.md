@@ -73,10 +73,21 @@ POST  /api/v1/conversations/:id/messages
 
 GET   /api/v1/comments
 POST  /api/v1/comments/sync
+POST  /api/v1/comments/:id/reply
 GET   /api/v1/comments/:id
 GET   /api/v1/posts/:id
 GET   /api/v1/posts/:id/preview
 ```
+
+Query filters for inbox lists (`GET /api/v1/comments`, `GET /api/v1/conversations`, `GET /api/v1/moderation/queue`):
+
+- `socialAccountId` (uuid, optional) — scope to one connected social account
+- `brandId` (uuid, optional) — scope to one brand
+- `status` (moderation queue only)
+
+List items include `socialAccountId`, `accountDisplayName`, `provider`, `brandId`, and `brandName`.
+
+`POST /api/v1/comments/:id/reply` body: `{ "text": string }` (1–2000 chars). Human reply only; queues outbound `reply` via the channel adapter. Not an AI suggested-reply endpoint.
 
 ## Tags
 

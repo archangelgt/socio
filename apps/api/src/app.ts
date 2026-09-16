@@ -17,6 +17,7 @@ import {
   getPost,
   getPostPreview,
   humanModerate,
+  humanReplyToComment,
   hydrateMissingPostMedia,
   ingestWebhook,
   isUniqueViolation,
@@ -388,8 +389,16 @@ export async function buildApp(options: AppOptions) {
       orgId(request),
       "AGENT",
     );
+    const query = z
+      .object({
+        socialAccountId: z.string().uuid().optional(),
+        brandId: z.string().uuid().optional(),
+      })
+      .parse(request.query);
     await hydrateMissingPostMedia(ctx, membership.organizationId);
-    return { comments: await listComments(ctx.db, membership.organizationId) };
+    return {
+      comments: await listComments(ctx.db, membership.organizationId, query),
+    };
   });
 
   app.post("/api/v1/comments/sync", async (request) => {
@@ -402,6 +411,26 @@ export async function buildApp(options: AppOptions) {
     return syncInstagramComments(ctx, membership.organizationId);
   });
 
+  app.post("/api/v1/comments/:id/reply", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z
+      .object({ text: z.string().min(1).max(2000) })
+      .parse(request.body);
+    await humanReplyToComment(ctx, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      commentId: params.id,
+      text: body.text,
+    });
+    return { ok: true };
+  });
+
   app.get("/api/v1/conversations", async (request) => {
     const { ctx, session } = await loadSession(request);
     const membership = requireMembership(
@@ -409,8 +438,18 @@ export async function buildApp(options: AppOptions) {
       orgId(request),
       "AGENT",
     );
+    const query = z
+      .object({
+        socialAccountId: z.string().uuid().optional(),
+        brandId: z.string().uuid().optional(),
+      })
+      .parse(request.query);
     return {
-      conversations: await listConversations(ctx.db, membership.organizationId),
+      conversations: await listConversations(
+        ctx.db,
+        membership.organizationId,
+        query,
+      ),
     };
   });
 
@@ -456,15 +495,19 @@ export async function buildApp(options: AppOptions) {
       "MODERATOR",
     );
     const query = z
-      .object({ status: z.string().optional() })
+      .object({
+        status: z.string().optional(),
+        socialAccountId: z.string().uuid().optional(),
+        brandId: z.string().uuid().optional(),
+      })
       .parse(request.query);
     await hydrateMissingPostMedia(ctx, membership.organizationId);
     return {
-      items: await listModerationQueue(
-        ctx.db,
-        membership.organizationId,
-        query.status,
-      ),
+      items: await listModerationQueue(ctx.db, membership.organizationId, {
+        status: query.status,
+        socialAccountId: query.socialAccountId,
+        brandId: query.brandId,
+      }),
     };
   });
 

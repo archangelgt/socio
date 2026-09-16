@@ -43,11 +43,17 @@ export { ingestWebhook, processInboundEvent } from "./inbound";
 export { syncInstagramComments } from "./sync";
 export {
   humanModerate,
+  humanReplyToComment,
   listModerationQueue,
   processModeration,
 } from "./moderate";
 export { processOutboundAction } from "./outbound";
-export { getPost, listComments, listConversations } from "./comments";
+export {
+  getPost,
+  listComments,
+  listConversations,
+  type InboxListFilters,
+} from "./comments";
 export { getPostPreview, hydrateMissingPostMedia } from "./posts";
 export {
   checkoutConfigFromEnv,

@@ -42,6 +42,8 @@ export {
   type NormalizedPost,
   type PublishInput,
   type PublishResult,
+  type ReplyToCommentInput,
+  type ReplyToCommentResult,
   type SendMessageInput,
   type SendMessageResult,
   type UnhideCommentInput,

@@ -550,6 +550,7 @@ export const moderationActions = pgTable(
     source: actionSourceEnum("source").notNull(),
     actionType: text("action_type").notNull(),
     provider: text("provider").notNull(),
+    payloadJson: jsonb("payload_json").notNull().default({}),
     externalActionId: text("external_action_id"),
     status: outboundStatusEnum("status").notNull().default("queued"),
     errorCode: text("error_code"),

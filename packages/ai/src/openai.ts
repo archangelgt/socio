@@ -1,9 +1,9 @@
 import { type ModerationResult, TAXONOMY_VERSION } from "@social-ai/domain";
 import { AIProviderError } from "./errors";
 import {
-  buildModerationUserPrompt,
   MODERATION_RESULT_SCHEMA,
   MODERATION_SYSTEM_PROMPT,
+  buildModerationUserPrompt,
 } from "./moderation-contract";
 import type {
   AIProvider,

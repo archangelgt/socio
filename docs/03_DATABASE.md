@@ -293,8 +293,9 @@ Outbound action bus (ADR-020).
 - comment_id
 - social_account_id
 - source (`policy` | `human`)
-- action_type (`hide` | `unhide` | `delete` | `allow`)
+- action_type (`hide` | `unhide` | `delete` | `allow` | `reply`)
 - provider
+- payload_json (action payload; reply text lives here)
 - external_action_id
 - status (`queued` | `succeeded` | `failed` | `skipped`)
 - error_code

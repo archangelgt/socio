@@ -53,6 +53,7 @@ interface ChannelAdapter {
   hideComment(input: HideCommentInput): Promise<HideCommentResult>;
   unhideComment(input: UnhideCommentInput): Promise<UnhideCommentResult>;
   deleteComment(input: DeleteCommentInput): Promise<DeleteCommentResult>;
+  replyToComment(input: ReplyToCommentInput): Promise<ReplyToCommentResult>;
   publish(input: PublishInput): Promise<PublishResult>;
 }
 ```

@@ -444,6 +444,103 @@ export async function hideOrShowInstagramComment(
   }
 }
 
+async function postCommentReply(
+  config: MetaGraphConfig,
+  input: {
+    accessToken: string;
+    commentId: string;
+    text: string;
+    network: "instagram" | "facebook";
+  },
+): Promise<{ replyId: string }> {
+  const path =
+    input.network === "facebook"
+      ? `/${input.commentId}/comments`
+      : `/${input.commentId}/replies`;
+  const response = await graphRequest<{ id?: string }>(config, {
+    method: "POST",
+    path,
+    accessToken: input.accessToken,
+    body: { message: input.text },
+  });
+  if (!response.id) {
+    throw new ChannelProviderError(
+      "unknown",
+      "Graph reply succeeded without a reply id.",
+    );
+  }
+  return { replyId: response.id };
+}
+
+export async function replyToMetaComment(
+  config: MetaGraphConfig,
+  input: {
+    accessToken: string;
+    commentId: string;
+    text: string;
+    network: "instagram" | "facebook";
+    mediaId?: string;
+    igUserId?: string;
+    body?: string;
+    author?: string;
+  },
+): Promise<{ commentId: string; replyId: string }> {
+  try {
+    const result = await postCommentReply(config, input);
+    return { commentId: input.commentId, replyId: result.replyId };
+  } catch (error) {
+    if (
+      input.network !== "instagram" ||
+      !(error instanceof ChannelProviderError) ||
+      (!input.mediaId && !input.igUserId) ||
+      (error.code !== "validation_error" &&
+        error.code !== "not_found" &&
+        error.code !== "forbidden")
+    ) {
+      throw error;
+    }
+    const listed = await collectInstagramCommentRefs(config, input);
+    const candidates = hideCandidateIds(listed, {
+      commentId: input.commentId,
+      body: input.body,
+      author: input.author,
+    });
+    try {
+      const current = await graphRequest<{
+        id?: string;
+        legacy_instagram_comment_id?: string;
+      }>(config, {
+        path: `/${input.commentId}`,
+        accessToken: input.accessToken,
+        query: { fields: "id,legacy_instagram_comment_id" },
+      });
+      if (
+        current.legacy_instagram_comment_id &&
+        current.legacy_instagram_comment_id !== input.commentId &&
+        !candidates.includes(current.legacy_instagram_comment_id)
+      ) {
+        candidates.push(current.legacy_instagram_comment_id);
+      }
+    } catch {
+      // Webhook ids are often not readable as Graph nodes.
+    }
+    for (const commentId of candidates) {
+      try {
+        const result = await postCommentReply(config, {
+          accessToken: input.accessToken,
+          commentId,
+          text: input.text,
+          network: "instagram",
+        });
+        return { commentId, replyId: result.replyId };
+      } catch {
+        // Try the next Graph id.
+      }
+    }
+    throw error;
+  }
+}
+
 export type InstagramMediaComment = {
   mediaId: string;
   commentId: string;

@@ -1,12 +1,9 @@
-import {
-  type ModerationResult,
-  TAXONOMY_VERSION,
-} from "@social-ai/domain";
+import { type ModerationResult, TAXONOMY_VERSION } from "@social-ai/domain";
 import { AIProviderError } from "./errors";
 import {
-  buildModerationUserPrompt,
   MODERATION_RESULT_SCHEMA,
   MODERATION_SYSTEM_PROMPT,
+  buildModerationUserPrompt,
 } from "./moderation-contract";
 import type {
   AIProvider,
@@ -111,13 +108,17 @@ export class AnthropicProvider implements AIProvider {
     }
 
     const text = body.content
-      ?.filter((block) => block.type === "text" && typeof block.text === "string")
+      ?.filter(
+        (block) => block.type === "text" && typeof block.text === "string",
+      )
       .map((block) => block.text)
       .join("")
       .trim();
 
     if (!text) {
-      throw new AIProviderError("Anthropic returned an empty moderation result.");
+      throw new AIProviderError(
+        "Anthropic returned an empty moderation result.",
+      );
     }
 
     let parsed: unknown;

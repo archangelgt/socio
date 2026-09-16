@@ -281,47 +281,188 @@ function ProviderMark({ provider }: { provider: string }) {
   );
 }
 
+function accountFilterKey(organizationId: string): string {
+  return `socio:accountFilter:${organizationId}`;
+}
+
+function readStoredAccountId(organizationId: string): string {
+  try {
+    return sessionStorage.getItem(accountFilterKey(organizationId)) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function storeAccountId(organizationId: string, accountId: string): void {
+  try {
+    if (accountId) {
+      sessionStorage.setItem(accountFilterKey(organizationId), accountId);
+    } else {
+      sessionStorage.removeItem(accountFilterKey(organizationId));
+    }
+  } catch {
+    // Ignore storage failures in private browsing.
+  }
+}
+
+type ChannelOption = Awaited<
+  ReturnType<typeof api.channels>
+>["channels"][number];
+
+function AccountSwitcher({
+  channels,
+  value,
+  onChange,
+}: {
+  channels: ChannelOption[];
+  value: string;
+  onChange: (accountId: string) => void;
+}) {
+  if (channels.length === 0) {
+    return null;
+  }
+  return (
+    <div
+      className="account-switcher"
+      role="tablist"
+      aria-label="Social account"
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={value === ""}
+        className={value === "" ? "active" : ""}
+        onClick={() => onChange("")}
+      >
+        All accounts
+      </button>
+      {channels.map((channel) => (
+        <button
+          key={channel.id}
+          type="button"
+          role="tab"
+          aria-selected={value === channel.id}
+          className={value === channel.id ? "active" : ""}
+          onClick={() => onChange(channel.id)}
+        >
+          {channel.displayName}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AccountBadge({
+  accountDisplayName,
+  brandName,
+  provider,
+}: {
+  accountDisplayName?: string | null;
+  brandName?: string | null;
+  provider?: string | null;
+}) {
+  if (!accountDisplayName) {
+    return null;
+  }
+  const label = brandName
+    ? `${accountDisplayName} · ${brandName}`
+    : accountDisplayName;
+  return (
+    <span className="account-badge" title={provider ?? undefined}>
+      {label}
+    </span>
+  );
+}
+
 function ActionButtons({
   status,
   onAllow,
   onHide,
   onRestore,
+  onReply,
+  replyOpen,
+  replyText,
+  onReplyText,
+  onSendReply,
+  onCancelReply,
+  replyBusy,
 }: {
   status: DisplayStatus;
   onAllow: () => void;
   onHide: () => void;
   onRestore: () => void;
+  onReply: () => void;
+  replyOpen: boolean;
+  replyText: string;
+  onReplyText: (value: string) => void;
+  onSendReply: () => void;
+  onCancelReply: () => void;
+  replyBusy: boolean;
 }) {
   const hidden = status === "hidden";
   const allowed = status === "allowed";
   return (
-    <div className="actions" aria-label="Moderation actions">
-      <button
-        type="button"
-        className={allowed ? "is-current is-allow" : ""}
-        aria-pressed={allowed}
-        disabled={allowed}
-        onClick={onAllow}
-      >
-        Allow
-      </button>
-      <button
-        type="button"
-        className={hidden ? "is-current is-hide" : ""}
-        aria-pressed={hidden}
-        disabled={hidden}
-        onClick={onHide}
-      >
-        Hide
-      </button>
-      <button
-        type="button"
-        className={hidden ? "is-restore" : ""}
-        disabled={!hidden}
-        onClick={onRestore}
-      >
-        Restore
-      </button>
+    <div className="action-stack">
+      <div className="actions" aria-label="Moderation actions">
+        <button
+          type="button"
+          className={allowed ? "is-current is-allow" : ""}
+          aria-pressed={allowed}
+          disabled={allowed}
+          onClick={onAllow}
+        >
+          Allow
+        </button>
+        <button
+          type="button"
+          className={hidden ? "is-current is-hide" : ""}
+          aria-pressed={hidden}
+          disabled={hidden}
+          onClick={onHide}
+        >
+          Hide
+        </button>
+        <button
+          type="button"
+          className={hidden ? "is-restore" : ""}
+          disabled={!hidden}
+          onClick={onRestore}
+        >
+          Restore
+        </button>
+        <button type="button" className="is-reply" onClick={onReply}>
+          Reply
+        </button>
+      </div>
+      {replyOpen ? (
+        <div className="reply-composer">
+          <textarea
+            value={replyText}
+            onChange={(event) => onReplyText(event.target.value)}
+            placeholder="Write a public reply…"
+            rows={3}
+            maxLength={2000}
+            disabled={replyBusy}
+          />
+          <div className="button-row">
+            <button
+              type="button"
+              disabled={replyBusy || !replyText.trim()}
+              onClick={onSendReply}
+            >
+              {replyBusy ? "Sending…" : "Send reply"}
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              disabled={replyBusy}
+              onClick={onCancelReply}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -661,24 +802,65 @@ function ModerationPage({
   const [items, setItems] = useState<
     Awaited<ReturnType<typeof api.queue>>["items"]
   >([]);
+  const [channels, setChannels] = useState<ChannelOption[]>([]);
+  const [accountId, setAccountId] = useState(() =>
+    readStoredAccountId(organizationId),
+  );
   const [syncing, setSyncing] = useState(false);
+  const [replyFor, setReplyFor] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [replyBusy, setReplyBusy] = useState(false);
 
   const reload = useCallback(() => {
     void api
-      .queue(organizationId)
+      .queue(organizationId, {
+        socialAccountId: accountId || undefined,
+      })
       .then((data) => setItems(data.items))
       .catch((err: Error) => setError(err.message));
-  }, [organizationId, setError]);
+  }, [organizationId, accountId, setError]);
+
+  useEffect(() => {
+    void api
+      .channels(organizationId)
+      .then((data) => {
+        setChannels(data.channels);
+        if (
+          accountId &&
+          !data.channels.some((channel) => channel.id === accountId)
+        ) {
+          setAccountId("");
+          storeAccountId(organizationId, "");
+        }
+      })
+      .catch((err: Error) => setError(err.message));
+  }, [organizationId, accountId, setError]);
 
   useEffect(() => {
     reload();
   }, [reload]);
 
+  const activeLabel =
+    channels.find((channel) => channel.id === accountId)?.displayName ??
+    "All accounts";
+
   return (
     <>
       <header>
         <h1>Moderation</h1>
-        <p className="muted">AI proposes. Policy decides. You can override.</p>
+        <p className="muted">
+          AI proposes. Policy decides. You can override. Viewing {activeLabel}.
+        </p>
+        <AccountSwitcher
+          channels={channels}
+          value={accountId}
+          onChange={(next) => {
+            setAccountId(next);
+            storeAccountId(organizationId, next);
+            setReplyFor(null);
+            setReplyText("");
+          }}
+        />
         <div className="button-row">
           <button
             type="button"
@@ -711,6 +893,7 @@ function ModerationPage({
             <thead>
               <tr>
                 <th>Comment</th>
+                <th>Account</th>
                 <th>When</th>
                 <th>Status</th>
                 <th>Severity</th>
@@ -738,6 +921,13 @@ function ModerationPage({
                           permalink={item.postPermalink}
                         />
                       </div>
+                    </td>
+                    <td>
+                      <AccountBadge
+                        accountDisplayName={item.accountDisplayName}
+                        brandName={item.brandName}
+                        provider={item.provider}
+                      />
                     </td>
                     <td className="muted when">{formatWhen(item.createdAt)}</td>
                     <td>
@@ -770,6 +960,37 @@ function ModerationPage({
                             .then(reload)
                             .catch((err: Error) => setError(err.message));
                         }}
+                        onReply={() => {
+                          setReplyFor((current) =>
+                            current === item.commentId ? null : item.commentId,
+                          );
+                          setReplyText("");
+                        }}
+                        replyOpen={replyFor === item.commentId}
+                        replyText={replyText}
+                        onReplyText={setReplyText}
+                        replyBusy={replyBusy}
+                        onCancelReply={() => {
+                          setReplyFor(null);
+                          setReplyText("");
+                        }}
+                        onSendReply={() => {
+                          setReplyBusy(true);
+                          void api
+                            .replyToComment(
+                              organizationId,
+                              item.commentId,
+                              replyText,
+                            )
+                            .then(() => {
+                              setReplyFor(null);
+                              setReplyText("");
+                              setError(null);
+                              reload();
+                            })
+                            .catch((err: Error) => setError(err.message))
+                            .finally(() => setReplyBusy(false));
+                        }}
                       />
                     </td>
                   </tr>
@@ -796,26 +1017,60 @@ function InboxPage({
   const [conversations, setConversations] = useState<
     Awaited<ReturnType<typeof api.conversations>>["conversations"]
   >([]);
+  const [channels, setChannels] = useState<ChannelOption[]>([]);
+  const [accountId, setAccountId] = useState(() =>
+    readStoredAccountId(organizationId),
+  );
 
   useEffect(() => {
+    void api
+      .channels(organizationId)
+      .then((data) => {
+        setChannels(data.channels);
+        if (
+          accountId &&
+          !data.channels.some((channel) => channel.id === accountId)
+        ) {
+          setAccountId("");
+          storeAccountId(organizationId, "");
+        }
+      })
+      .catch((err: Error) => setError(err.message));
+  }, [organizationId, accountId, setError]);
+
+  useEffect(() => {
+    const filters = { socialAccountId: accountId || undefined };
     void Promise.all([
-      api.comments(organizationId),
-      api.conversations(organizationId),
+      api.comments(organizationId, filters),
+      api.conversations(organizationId, filters),
     ])
       .then(([commentData, conversationData]) => {
         setComments(commentData.comments);
         setConversations(conversationData.conversations);
       })
       .catch((err: Error) => setError(err.message));
-  }, [organizationId, setError]);
+  }, [organizationId, accountId, setError]);
+
+  const activeLabel =
+    channels.find((channel) => channel.id === accountId)?.displayName ??
+    "All accounts";
 
   return (
     <>
       <header>
         <h1>Inbox</h1>
         <p className="muted">
-          Comments and messages across connected accounts.
+          Comments and messages for {activeLabel}. Switch accounts to keep each
+          brand separate.
         </p>
+        <AccountSwitcher
+          channels={channels}
+          value={accountId}
+          onChange={(next) => {
+            setAccountId(next);
+            storeAccountId(organizationId, next);
+          }}
+        />
       </header>
       {conversations.length > 0 ? (
         <>
@@ -830,6 +1085,11 @@ function InboxPage({
                     {item.unread ? " · unread" : ""}
                   </span>
                 </div>
+                <AccountBadge
+                  accountDisplayName={item.accountDisplayName}
+                  brandName={item.brandName}
+                  provider={item.provider}
+                />
                 {item.lastMessageBody ? <p>{item.lastMessageBody}</p> : null}
               </li>
             ))}
@@ -856,6 +1116,11 @@ function InboxPage({
                       {formatWhen(comment.createdAt)}
                     </span>
                   </div>
+                  <AccountBadge
+                    accountDisplayName={comment.accountDisplayName}
+                    brandName={comment.brandName}
+                    provider={comment.provider}
+                  />
                   <p>{comment.body}</p>
                   <StatusBadge
                     status={displayStatus({

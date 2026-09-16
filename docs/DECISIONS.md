@@ -135,7 +135,7 @@ Low confidence maps to `REVIEW_REQUIRED`, not a separate `escalate` status. `ESC
 
 ## ADR-020 — Single outbound action bus
 
-Decision: hide, unhide, and delete are executed only by the outbound-actions worker via `ChannelAdapter`.
+Decision: hide, unhide, delete, and human reply are executed only by the outbound-actions worker via `ChannelAdapter`.
 
 Sources (`policy`, `human`, `automation`) insert into the same `moderation_actions` (V1) / outbound jobs table. Automation (Phase 5) must not call adapters.
 

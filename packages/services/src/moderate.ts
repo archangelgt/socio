@@ -23,6 +23,7 @@ import {
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { getChannelAdapter } from "./adapters";
 import { writeAudit } from "./audit";
+import type { InboxListFilters } from "./comments";
 import type { ServiceContext } from "./context";
 import { AppError } from "./errors";
 import { enqueueOutboundAction } from "./outbound";
@@ -281,8 +282,58 @@ export async function processModeration(
 export async function listModerationQueue(
   db: Database,
   organizationId: string,
-  status?: string,
+  options: { status?: string } & InboxListFilters = {},
 ) {
+  const { status, socialAccountId, brandId } = options;
+
+  if (socialAccountId) {
+    const [account] = await db
+      .select({ id: socialAccounts.id })
+      .from(socialAccounts)
+      .where(
+        and(
+          eq(socialAccounts.id, socialAccountId),
+          eq(socialAccounts.organizationId, organizationId),
+        ),
+      )
+      .limit(1);
+    if (!account) {
+      throw new AppError(
+        404,
+        "ACCOUNT_NOT_FOUND",
+        "Social account not found in this workspace.",
+      );
+    }
+  }
+  if (brandId) {
+    const [brand] = await db
+      .select({ id: brands.id })
+      .from(brands)
+      .where(
+        and(eq(brands.id, brandId), eq(brands.organizationId, organizationId)),
+      )
+      .limit(1);
+    if (!brand) {
+      throw new AppError(
+        404,
+        "BRAND_NOT_FOUND",
+        "Brand not found in this workspace.",
+      );
+    }
+  }
+
+  const orphanFilters = [
+    eq(comments.organizationId, organizationId),
+    inArray(comments.moderationStatus, ["PENDING", "REVIEW_REQUIRED"]),
+    isNull(moderationDecisions.id),
+  ];
+  if (socialAccountId) {
+    orphanFilters.push(eq(comments.socialAccountId, socialAccountId));
+  }
+  if (brandId) {
+    orphanFilters.push(eq(comments.brandId, brandId));
+  }
+
   const orphans = await db
     .select({
       id: comments.id,
@@ -294,13 +345,7 @@ export async function listModerationQueue(
       moderationDecisions,
       eq(moderationDecisions.commentId, comments.id),
     )
-    .where(
-      and(
-        eq(comments.organizationId, organizationId),
-        inArray(comments.moderationStatus, ["PENDING", "REVIEW_REQUIRED"]),
-        isNull(moderationDecisions.id),
-      ),
-    );
+    .where(and(...orphanFilters));
 
   for (const orphan of orphans) {
     await insertFallbackDecision(db, orphan, {
@@ -316,6 +361,12 @@ export async function listModerationQueue(
   ];
   if (status && (QUEUE_STATES as readonly string[]).includes(status)) {
     filters.push(eq(comments.moderationStatus, status as QueueState));
+  }
+  if (socialAccountId) {
+    filters.push(eq(comments.socialAccountId, socialAccountId));
+  }
+  if (brandId) {
+    filters.push(eq(comments.brandId, brandId));
   }
 
   const rows = await db
@@ -336,10 +387,17 @@ export async function listModerationQueue(
       postBody: posts.body,
       postPermalink: posts.permalink,
       postMetadata: posts.metadataJson,
+      socialAccountId: comments.socialAccountId,
+      brandId: comments.brandId,
+      accountDisplayName: socialAccounts.displayName,
+      provider: socialAccounts.provider,
+      brandName: brands.name,
     })
     .from(moderationDecisions)
     .innerJoin(comments, eq(comments.id, moderationDecisions.commentId))
     .leftJoin(posts, eq(posts.id, comments.postId))
+    .innerJoin(socialAccounts, eq(socialAccounts.id, comments.socialAccountId))
+    .innerJoin(brands, eq(brands.id, comments.brandId))
     .where(and(...filters))
     .orderBy(desc(moderationDecisions.createdAt))
     .limit(100);
@@ -361,6 +419,11 @@ export async function listModerationQueue(
     postBody: row.postBody,
     postPermalink: row.postPermalink,
     postThumbnailUrl: thumbnailFromMetadata(row.postMetadata),
+    socialAccountId: row.socialAccountId,
+    brandId: row.brandId,
+    accountDisplayName: row.accountDisplayName,
+    provider: row.provider,
+    brandName: row.brandName,
   }));
 }
 
@@ -506,5 +569,106 @@ export async function humanModerate(
     eventType: "moderation.hidden",
     entityType: "moderation_decision",
     entityId: decision.id,
+  });
+}
+
+export async function humanReplyToComment(
+  ctx: ServiceContext,
+  input: {
+    organizationId: string;
+    actorId: string;
+    commentId: string;
+    text: string;
+  },
+) {
+  const text = input.text.trim();
+  if (!text) {
+    throw new AppError(400, "REPLY_TEXT_REQUIRED", "Reply text is required.");
+  }
+  if (text.length > 2000) {
+    throw new AppError(
+      400,
+      "REPLY_TEXT_TOO_LONG",
+      "Reply text must be 2000 characters or fewer.",
+    );
+  }
+
+  const [comment] = await ctx.db
+    .select()
+    .from(comments)
+    .where(
+      and(
+        eq(comments.id, input.commentId),
+        eq(comments.organizationId, input.organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!comment) {
+    throw new AppError(404, "COMMENT_NOT_FOUND", "Comment not found.");
+  }
+
+  const [account] = await ctx.db
+    .select({
+      id: socialAccounts.id,
+      provider: socialAccounts.provider,
+    })
+    .from(socialAccounts)
+    .where(
+      and(
+        eq(socialAccounts.id, comment.socialAccountId),
+        eq(socialAccounts.organizationId, input.organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!account) {
+    throw new AppError(
+      404,
+      "ACCOUNT_NOT_FOUND",
+      "Social account not found for this comment.",
+    );
+  }
+
+  const adapter = getChannelAdapter(account.provider, ctx.meta);
+  if (!adapter.capabilities().replyToComments) {
+    throw new AppError(
+      400,
+      "MODERATION_ACTION_NOT_SUPPORTED",
+      "This channel does not support replying to comments.",
+    );
+  }
+
+  const [decision] = await ctx.db
+    .select({ id: moderationDecisions.id })
+    .from(moderationDecisions)
+    .where(
+      and(
+        eq(moderationDecisions.commentId, comment.id),
+        eq(moderationDecisions.organizationId, input.organizationId),
+      ),
+    )
+    .orderBy(desc(moderationDecisions.createdAt))
+    .limit(1);
+
+  await enqueueOutboundAction(ctx, {
+    organizationId: input.organizationId,
+    decisionId: decision?.id ?? null,
+    commentId: comment.id,
+    socialAccountId: comment.socialAccountId,
+    source: "human",
+    actionType: "reply",
+    provider: account.provider,
+    payload: { text },
+  });
+
+  await writeAudit(ctx.db, {
+    organizationId: input.organizationId,
+    actorType: "user",
+    actorId: input.actorId,
+    eventType: "moderation.replied",
+    entityType: "comment",
+    entityId: comment.id,
+    metadata: { textLength: text.length },
   });
 }

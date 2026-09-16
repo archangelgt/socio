@@ -38,4 +38,17 @@ describe("MockChannelAdapter", () => {
       }),
     ).rejects.toBeInstanceOf(UnsupportedChannelActionError);
   });
+
+  it("replies to a comment", async () => {
+    const adapter = new MockChannelAdapter();
+    const result = await adapter.replyToComment({
+      organizationId: "org-1",
+      accountId: "acc-1",
+      externalCommentId: "c-1",
+      text: "Thanks for the feedback",
+    });
+    expect(result.ok).toBe(true);
+    expect(adapter.replies).toHaveLength(1);
+    expect(adapter.replies[0]?.text).toBe("Thanks for the feedback");
+  });
 });

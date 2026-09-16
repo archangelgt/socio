@@ -112,8 +112,19 @@ export const api = {
       method: "DELETE",
       organizationId,
     }),
-  comments: (organizationId: string) =>
-    request<{
+  comments: (
+    organizationId: string,
+    filters?: { socialAccountId?: string; brandId?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (filters?.socialAccountId) {
+      params.set("socialAccountId", filters.socialAccountId);
+    }
+    if (filters?.brandId) {
+      params.set("brandId", filters.brandId);
+    }
+    const query = params.toString();
+    return request<{
       comments: {
         id: string;
         body: string;
@@ -127,15 +138,38 @@ export const api = {
         postPermalink: string | null;
         postThumbnailUrl: string | null;
         postId: string | null;
+        socialAccountId: string;
+        brandId: string;
+        accountDisplayName: string | null;
+        provider: string;
+        brandName: string | null;
       }[];
-    }>("/api/v1/comments", { organizationId }),
+    }>(`/api/v1/comments${query ? `?${query}` : ""}`, { organizationId });
+  },
   syncComments: (organizationId: string) =>
     request<{ ingested: number; seen: number }>("/api/v1/comments/sync", {
       method: "POST",
       organizationId,
     }),
-  conversations: (organizationId: string) =>
-    request<{
+  replyToComment: (organizationId: string, commentId: string, text: string) =>
+    request<{ ok: boolean }>(`/api/v1/comments/${commentId}/reply`, {
+      method: "POST",
+      organizationId,
+      body: { text },
+    }),
+  conversations: (
+    organizationId: string,
+    filters?: { socialAccountId?: string; brandId?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (filters?.socialAccountId) {
+      params.set("socialAccountId", filters.socialAccountId);
+    }
+    if (filters?.brandId) {
+      params.set("brandId", filters.brandId);
+    }
+    const query = params.toString();
+    return request<{
       conversations: {
         id: string;
         status: string;
@@ -143,11 +177,32 @@ export const api = {
         lastMessageAt: string | null;
         contactName: string | null;
         socialAccountId: string;
+        brandId: string;
+        accountDisplayName: string | null;
+        provider: string;
+        brandName: string | null;
         lastMessageBody: string | null;
       }[];
-    }>("/api/v1/conversations", { organizationId }),
-  queue: (organizationId: string, status?: string) =>
-    request<{
+    }>(`/api/v1/conversations${query ? `?${query}` : ""}`, {
+      organizationId,
+    });
+  },
+  queue: (
+    organizationId: string,
+    filters?: { status?: string; socialAccountId?: string; brandId?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (filters?.status) {
+      params.set("status", filters.status);
+    }
+    if (filters?.socialAccountId) {
+      params.set("socialAccountId", filters.socialAccountId);
+    }
+    if (filters?.brandId) {
+      params.set("brandId", filters.brandId);
+    }
+    const query = params.toString();
+    return request<{
       items: {
         decisionId: string;
         commentId: string;
@@ -163,10 +218,16 @@ export const api = {
         postId: string | null;
         postThumbnailUrl: string | null;
         postPermalink: string | null;
+        socialAccountId: string;
+        brandId: string;
+        accountDisplayName: string | null;
+        provider: string;
+        brandName: string | null;
       }[];
-    }>(`/api/v1/moderation/queue${status ? `?status=${status}` : ""}`, {
+    }>(`/api/v1/moderation/queue${query ? `?${query}` : ""}`, {
       organizationId,
-    }),
+    });
+  },
   allow: (organizationId: string, id: string) =>
     request(`/api/v1/moderation/decisions/${id}/allow`, {
       method: "POST",

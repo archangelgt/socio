@@ -6,6 +6,7 @@ import type {
   HideCommentInput,
   NormalizedChannelEvent,
   PublishInput,
+  ReplyToCommentInput,
   SendMessageInput,
   UnhideCommentInput,
 } from "./types";
@@ -39,6 +40,11 @@ type MockCommentEvent = {
 export class MockChannelAdapter implements ChannelAdapter {
   readonly provider = "mock";
   readonly hiddenCommentIds = new Set<string>();
+  readonly replies: Array<{
+    externalCommentId: string;
+    text: string;
+    externalReplyId: string;
+  }> = [];
 
   capabilities(): ChannelCapabilities {
     return { ...MOCK_CAPABILITIES };
@@ -97,6 +103,30 @@ export class MockChannelAdapter implements ChannelAdapter {
 
   async deleteComment(_input: DeleteCommentInput): Promise<never> {
     throw new UnsupportedChannelActionError("deleteComment", this.provider);
+  }
+
+  async replyToComment(input: ReplyToCommentInput): Promise<{
+    ok: true;
+    externalActionId: string;
+    externalCommentId: string;
+    externalReplyId: string;
+  }> {
+    const text = input.text.trim();
+    if (!text) {
+      throw new Error("Reply text is required.");
+    }
+    const externalReplyId = `mock-reply-${this.replies.length + 1}`;
+    this.replies.push({
+      externalCommentId: input.externalCommentId,
+      text,
+      externalReplyId,
+    });
+    return {
+      ok: true,
+      externalActionId: `reply-${input.externalCommentId}`,
+      externalCommentId: input.externalCommentId,
+      externalReplyId,
+    };
   }
 
   async publish(_input: PublishInput): Promise<never> {

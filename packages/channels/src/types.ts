@@ -77,6 +77,17 @@ export type UnhideCommentResult = HideCommentResult;
 export type DeleteCommentInput = HideCommentInput;
 export type DeleteCommentResult = HideCommentResult;
 
+export type ReplyToCommentInput = HideCommentInput & {
+  text: string;
+};
+
+export type ReplyToCommentResult = {
+  ok: boolean;
+  externalActionId?: string;
+  externalCommentId?: string;
+  externalReplyId?: string;
+};
+
 export type SendMessageInput = {
   organizationId: string;
   accountId: string;
@@ -127,6 +138,7 @@ export interface ChannelAdapter {
   hideComment(input: HideCommentInput): Promise<HideCommentResult>;
   unhideComment(input: UnhideCommentInput): Promise<UnhideCommentResult>;
   deleteComment(input: DeleteCommentInput): Promise<DeleteCommentResult>;
+  replyToComment(input: ReplyToCommentInput): Promise<ReplyToCommentResult>;
   publish(input: PublishInput): Promise<PublishResult>;
   getComment?(input: {
     accessToken: string;

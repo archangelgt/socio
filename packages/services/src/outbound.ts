@@ -8,28 +8,32 @@ import type { ServiceContext } from "./context";
 import { decryptSecret } from "./crypto";
 import { AppError } from "./errors";
 
+export type OutboundActionType = "hide" | "unhide" | "delete" | "reply";
+
 export async function enqueueOutboundAction(
   ctx: ServiceContext,
   input: {
     organizationId: string;
-    decisionId: string;
+    decisionId?: string | null;
     commentId: string;
     socialAccountId: string;
     source: "policy" | "human";
-    actionType: "hide" | "unhide" | "delete";
+    actionType: OutboundActionType;
     provider: string;
+    payload?: Record<string, unknown>;
   },
 ): Promise<void> {
   const [action] = await ctx.db
     .insert(moderationActions)
     .values({
       organizationId: input.organizationId,
-      moderationDecisionId: input.decisionId,
+      moderationDecisionId: input.decisionId ?? null,
       commentId: input.commentId,
       socialAccountId: input.socialAccountId,
       source: input.source,
       actionType: input.actionType,
       provider: input.provider,
+      payloadJson: input.payload ?? {},
       status: "queued",
     })
     .returning();
@@ -92,6 +96,10 @@ export async function processOutboundAction(
   const capabilities = adapter.capabilities();
   const accessToken = decryptSecret(account.accessTokenEncrypted, ctx.tokenKey);
   const network = account.provider === "facebook" ? "facebook" : "instagram";
+  const payload =
+    action.payloadJson && typeof action.payloadJson === "object"
+      ? (action.payloadJson as Record<string, unknown>)
+      : {};
 
   try {
     if (action.actionType === "hide") {
@@ -182,6 +190,63 @@ export async function processOutboundAction(
           executedAt: new Date(),
         })
         .where(eq(moderationActions.id, actionId));
+    } else if (action.actionType === "reply") {
+      if (!capabilities.replyToComments) {
+        throw new AppError(
+          400,
+          "MODERATION_ACTION_NOT_SUPPORTED",
+          "This channel does not support replying to comments.",
+        );
+      }
+      const text = typeof payload.text === "string" ? payload.text.trim() : "";
+      if (!text) {
+        throw new AppError(
+          400,
+          "REPLY_TEXT_REQUIRED",
+          "Reply text is required.",
+        );
+      }
+      const result = await adapter.replyToComment({
+        organizationId: action.organizationId,
+        accountId: account.externalAccountId,
+        externalCommentId: comment.externalCommentId,
+        accessToken,
+        network,
+        externalPostId: comment.externalPostId,
+        commentBody: comment.body,
+        authorDisplayName: comment.authorDisplayName ?? undefined,
+        text,
+      });
+      if (
+        result.externalCommentId &&
+        result.externalCommentId !== comment.externalCommentId
+      ) {
+        try {
+          await ctx.db
+            .update(comments)
+            .set({ externalCommentId: result.externalCommentId })
+            .where(
+              and(
+                eq(comments.id, comment.id),
+                eq(comments.organizationId, action.organizationId),
+              ),
+            );
+        } catch {
+          // Keep the original id if Graph already stored a row for it.
+        }
+      }
+      await ctx.db
+        .update(moderationActions)
+        .set({
+          status: "succeeded",
+          externalActionId: result.externalReplyId ?? result.externalActionId,
+          executedAt: new Date(),
+          payloadJson: {
+            ...payload,
+            externalReplyId: result.externalReplyId,
+          },
+        })
+        .where(eq(moderationActions.id, actionId));
     } else {
       await ctx.db
         .update(moderationActions)
@@ -208,18 +273,20 @@ export async function processOutboundAction(
         errorMessage: message,
       })
       .where(eq(moderationActions.id, actionId));
-    await ctx.db
-      .update(comments)
-      .set({
-        moderationStatus: "ACTION_FAILED",
-        status: "visible",
-      })
-      .where(
-        and(
-          eq(comments.id, comment.id),
-          eq(comments.organizationId, action.organizationId),
-        ),
-      );
+    if (action.actionType !== "reply") {
+      await ctx.db
+        .update(comments)
+        .set({
+          moderationStatus: "ACTION_FAILED",
+          status: "visible",
+        })
+        .where(
+          and(
+            eq(comments.id, comment.id),
+            eq(comments.organizationId, action.organizationId),
+          ),
+        );
+    }
     await writeAudit(ctx.db, {
       organizationId: action.organizationId,
       actorType: action.source === "policy" ? "ai_policy" : "user",

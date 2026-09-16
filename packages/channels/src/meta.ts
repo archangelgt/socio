@@ -4,6 +4,7 @@ import {
   fetchMetaComment,
   graphRequest,
   hideOrShowInstagramComment,
+  replyToMetaComment,
 } from "./meta-graph";
 import { normalizeMetaPayload, verifyMetaSignature } from "./meta-webhook";
 import { UnsupportedChannelActionError } from "./types";
@@ -15,6 +16,7 @@ import type {
   NormalizedChannelEvent,
   NormalizedComment,
   PublishInput,
+  ReplyToCommentInput,
   SendMessageInput,
   UnhideCommentInput,
 } from "./types";
@@ -25,7 +27,7 @@ const META_CAPABILITIES: ChannelCapabilities = {
   hideComments: true,
   unhideComments: true,
   deleteComments: false,
-  replyToComments: false,
+  replyToComments: true,
   sendMessages: false,
   publishPosts: false,
 };
@@ -91,9 +93,11 @@ export class MetaChannelAdapter implements ChannelAdapter {
     throw new UnsupportedChannelActionError("sendMessage", this.provider);
   }
 
-  async hideComment(
-    input: HideCommentInput,
-  ): Promise<{ ok: true; externalActionId: string; externalCommentId: string }> {
+  async hideComment(input: HideCommentInput): Promise<{
+    ok: true;
+    externalActionId: string;
+    externalCommentId: string;
+  }> {
     const accessToken = requireToken(input);
     const network = networkOf(input);
     if (network === "facebook") {
@@ -126,9 +130,11 @@ export class MetaChannelAdapter implements ChannelAdapter {
     };
   }
 
-  async unhideComment(
-    input: UnhideCommentInput,
-  ): Promise<{ ok: true; externalActionId: string; externalCommentId: string }> {
+  async unhideComment(input: UnhideCommentInput): Promise<{
+    ok: true;
+    externalActionId: string;
+    externalCommentId: string;
+  }> {
     const accessToken = requireToken(input);
     const network = networkOf(input);
     if (network === "facebook") {
@@ -163,6 +169,39 @@ export class MetaChannelAdapter implements ChannelAdapter {
 
   async deleteComment(_input: DeleteCommentInput): Promise<never> {
     throw new UnsupportedChannelActionError("deleteComment", this.provider);
+  }
+
+  async replyToComment(input: ReplyToCommentInput): Promise<{
+    ok: true;
+    externalActionId: string;
+    externalCommentId: string;
+    externalReplyId: string;
+  }> {
+    const text = input.text.trim();
+    if (!text) {
+      throw new ChannelProviderError(
+        "validation_error",
+        "Reply text is required.",
+      );
+    }
+    const accessToken = requireToken(input);
+    const network = networkOf(input);
+    const result = await replyToMetaComment(this.config, {
+      accessToken,
+      commentId: input.externalCommentId,
+      text,
+      network,
+      mediaId: input.externalPostId,
+      igUserId: input.accountId,
+      body: input.commentBody,
+      author: input.authorDisplayName,
+    });
+    return {
+      ok: true,
+      externalActionId: `reply-${result.replyId}`,
+      externalCommentId: result.commentId,
+      externalReplyId: result.replyId,
+    };
   }
 
   async publish(_input: PublishInput): Promise<never> {
