@@ -5,7 +5,6 @@ import {
   listMetaPages,
   parseMetaOAuthState,
   signMetaOAuthState,
-  subscribeMetaInstagram,
   subscribeMetaPage,
 } from "@social-ai/channels";
 import { type Database, brands, socialAccounts } from "@social-ai/db";
@@ -206,16 +205,17 @@ async function connectPage(
     tokenExpiresAt?: Date;
   },
 ) {
+  // Facebook Login path: Page subscribed_apps enables Instagram comment
+  // webhooks together with the App Dashboard Instagram `comments` field.
+  // Meta still requires Live mode + Advanced Access for non-role commenters.
   try {
     await subscribeMetaPage(meta, input.page);
-  } catch {
-    // App-level Instagram subscriptions can still deliver comments.
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Page webhook subscribe failed";
+    throw new AppError(502, "META_SUBSCRIBE_FAILED", message);
   }
-  try {
-    await subscribeMetaInstagram(meta, input.page);
-  } catch {
-    // Comment webhooks need Live mode; Graph sync still works in Development.
-  }
+  // Instagram Login would subscribe the IG user; Facebook Login only needs the Page.
 
   const connected = [];
   const facebook = await upsertConnectedAccount(db, {

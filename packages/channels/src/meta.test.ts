@@ -474,6 +474,67 @@ describe("MetaChannelAdapter", () => {
     ]);
   });
 
+  it("paginates Instagram media when listing comments", async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const href = String(input);
+      if (href.includes("after=cursor1")) {
+        return new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: "m2",
+                comments: {
+                  data: [
+                    {
+                      id: "c2",
+                      text: "hola buenas tardes",
+                      username: "xavim_08",
+                      timestamp: "2026-09-16T18:06:58+0000",
+                      from: { id: "u2", username: "xavim_08" },
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "m1",
+              comments: {
+                data: [
+                  {
+                    id: "c1",
+                    text: "first",
+                    username: "a",
+                    timestamp: "2026-09-01T00:00:00+0000",
+                  },
+                ],
+              },
+            },
+          ],
+          paging: { cursors: { after: "cursor1" } },
+        }),
+        { status: 200 },
+      );
+    });
+
+    const comments = await listInstagramMediaComments(
+      {
+        graphVersion: "v21.0",
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      },
+      { accessToken: "page-token", igUserId: "17841", maxMedia: 50 },
+    );
+
+    expect(comments.map((c) => c.commentId)).toEqual(["c1", "c2"]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it("picks image, video, and carousel thumbnails", async () => {
     expect(
       pickMediaThumbnail({

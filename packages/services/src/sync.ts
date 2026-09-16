@@ -1,6 +1,8 @@
 import {
   ChannelProviderError,
+  type MetaPage,
   listInstagramMediaComments,
+  subscribeMetaPage,
 } from "@social-ai/channels";
 import { inboundEvents, socialAccounts } from "@social-ai/db";
 import { QUEUE_INBOUND_EVENTS } from "@social-ai/domain";
@@ -9,6 +11,42 @@ import type { ServiceContext } from "./context";
 import { decryptSecret } from "./crypto";
 import { AppError } from "./errors";
 import { upsertSocialPost } from "./posts";
+
+function pageIdFromMetadata(metadata: unknown): string | undefined {
+  if (!metadata || typeof metadata !== "object") {
+    return undefined;
+  }
+  const pageId = (metadata as { pageId?: unknown }).pageId;
+  return typeof pageId === "string" && pageId.length > 0 ? pageId : undefined;
+}
+
+async function refreshPageWebhookSubscription(
+  ctx: ServiceContext,
+  account: typeof socialAccounts.$inferSelect,
+  accessToken: string,
+): Promise<void> {
+  if (!ctx.meta) {
+    return;
+  }
+  const pageId =
+    pageIdFromMetadata(account.metadataJson) ??
+    (account.provider === "facebook" ? account.externalAccountId : undefined);
+  if (!pageId) {
+    return;
+  }
+  const page: MetaPage = {
+    id: pageId,
+    name: account.displayName,
+    accessToken,
+    instagramUserId:
+      account.provider === "instagram" ? account.externalAccountId : undefined,
+  };
+  try {
+    await subscribeMetaPage(ctx.meta, page);
+  } catch {
+    // Sync must still pull comments even if Meta rejects re-subscribe.
+  }
+}
 
 export async function syncInstagramComments(
   ctx: ServiceContext,
@@ -37,11 +75,18 @@ export async function syncInstagramComments(
   let seen = 0;
 
   for (const account of accounts) {
+    const accessToken = decryptSecret(
+      account.accessTokenEncrypted,
+      ctx.tokenKey,
+    );
+    await refreshPageWebhookSubscription(ctx, account, accessToken);
+
     let comments: Awaited<ReturnType<typeof listInstagramMediaComments>>;
     try {
       comments = await listInstagramMediaComments(ctx.meta, {
-        accessToken: decryptSecret(account.accessTokenEncrypted, ctx.tokenKey),
+        accessToken,
         igUserId: account.externalAccountId,
+        maxMedia: 100,
       });
     } catch (error) {
       if (error instanceof ChannelProviderError) {
@@ -115,4 +160,27 @@ export async function syncInstagramComments(
   }
 
   return { ingested, seen };
+}
+
+export async function syncAllInstagramComments(
+  ctx: ServiceContext,
+): Promise<{ organizations: number; ingested: number; seen: number }> {
+  const rows = await ctx.db
+    .selectDistinct({ organizationId: socialAccounts.organizationId })
+    .from(socialAccounts)
+    .where(
+      and(
+        eq(socialAccounts.provider, "instagram"),
+        eq(socialAccounts.status, "active"),
+      ),
+    );
+
+  let ingested = 0;
+  let seen = 0;
+  for (const row of rows) {
+    const result = await syncInstagramComments(ctx, row.organizationId);
+    ingested += result.ingested;
+    seen += result.seen;
+  }
+  return { organizations: rows.length, ingested, seen };
 }

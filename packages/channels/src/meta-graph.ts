@@ -157,21 +157,21 @@ export async function subscribeMetaPage(
   });
 }
 
+/**
+ * Facebook Login for Business: Instagram comment webhooks are enabled by
+ * subscribing the linked **Page** (`subscribeMetaPage`) plus the App Dashboard
+ * Instagram `comments` field. `/{ig-user-id}/subscribed_apps` is for Instagram
+ * Login tokens on graph.instagram.com and fails with page tokens (#3 / #100).
+ *
+ * Kept as an explicit step so connect/sync call sites stay readable.
+ */
 export async function subscribeMetaInstagram(
-  config: MetaGraphConfig,
+  _config: MetaGraphConfig,
   page: MetaPage,
 ): Promise<void> {
   if (!page.instagramUserId) {
     return;
   }
-  await graphRequest(config, {
-    method: "POST",
-    path: `/${page.instagramUserId}/subscribed_apps`,
-    accessToken: page.accessToken,
-    query: {
-      subscribed_fields: "comments,live_comments,mentions,messages",
-    },
-  });
 }
 
 export async function fetchMetaComment(
@@ -586,62 +586,88 @@ function parseGraphTime(value: string | undefined): string {
   return date.toISOString();
 }
 
+type InstagramMediaListResponse = {
+  data?: Array<{
+    id: string;
+    caption?: string;
+    permalink?: string;
+    media_type?: string;
+    media_url?: string;
+    thumbnail_url?: string;
+    children?: { data?: GraphMediaNode[] };
+    comments?: {
+      data?: Array<{
+        id: string;
+        text?: string;
+        username?: string;
+        timestamp?: string;
+        parent_id?: string;
+        from?: { id?: string; username?: string; name?: string };
+        legacy_instagram_comment_id?: string;
+      }>;
+    };
+  }>;
+  paging?: { cursors?: { after?: string }; next?: string };
+};
+
+const MEDIA_PAGE_SIZE = 25;
+const DEFAULT_MAX_MEDIA = 100;
+
 export async function listInstagramMediaComments(
   config: MetaGraphConfig,
-  input: { accessToken: string; igUserId: string },
+  input: { accessToken: string; igUserId: string; maxMedia?: number },
 ): Promise<InstagramMediaComment[]> {
-  const response = await graphRequest<{
-    data?: Array<{
-      id: string;
-      caption?: string;
-      permalink?: string;
-      media_type?: string;
-      media_url?: string;
-      thumbnail_url?: string;
-      children?: { data?: GraphMediaNode[] };
-      comments?: {
-        data?: Array<{
-          id: string;
-          text?: string;
-          username?: string;
-          timestamp?: string;
-          parent_id?: string;
-          from?: { id?: string; username?: string; name?: string };
-          legacy_instagram_comment_id?: string;
-        }>;
-      };
-    }>;
-  }>(config, {
-    path: `/${input.igUserId}/media`,
-    accessToken: input.accessToken,
-    query: {
-      fields:
-        "id,caption,media_type,media_url,thumbnail_url,permalink,children{media_url,thumbnail_url,media_type},comments.limit(50){id,text,username,timestamp,from,parent_id,legacy_instagram_comment_id}",
-      limit: "8",
-    },
-  });
-
+  const maxMedia = Math.max(1, input.maxMedia ?? DEFAULT_MAX_MEDIA);
   const comments: InstagramMediaComment[] = [];
-  for (const media of response.data ?? []) {
-    const thumbnailUrl = pickMediaThumbnail(media);
-    for (const comment of media.comments?.data ?? []) {
-      comments.push({
-        mediaId: media.id,
-        commentId: comment.id,
-        body: comment.text ?? "",
-        authorExternalId: comment.from?.id ?? comment.username ?? "unknown",
-        authorDisplayName:
-          comment.from?.username ?? comment.from?.name ?? comment.username,
-        parentId: comment.parent_id,
-        occurredAt: parseGraphTime(comment.timestamp),
-        caption: media.caption,
-        permalink: media.permalink,
-        thumbnailUrl,
-        mediaType: media.media_type,
-        legacyId: comment.legacy_instagram_comment_id,
-      });
+  let after: string | undefined;
+  let fetchedMedia = 0;
+
+  while (fetchedMedia < maxMedia) {
+    const pageLimit = Math.min(MEDIA_PAGE_SIZE, maxMedia - fetchedMedia);
+    const response = await graphRequest<InstagramMediaListResponse>(config, {
+      path: `/${input.igUserId}/media`,
+      accessToken: input.accessToken,
+      query: {
+        fields:
+          "id,caption,media_type,media_url,thumbnail_url,permalink,children{media_url,thumbnail_url,media_type},comments.limit(50){id,text,username,timestamp,from,parent_id,legacy_instagram_comment_id}",
+        limit: String(pageLimit),
+        after,
+      },
+    });
+
+    const page = response.data ?? [];
+    if (page.length === 0) {
+      break;
+    }
+
+    for (const media of page) {
+      fetchedMedia += 1;
+      const thumbnailUrl = pickMediaThumbnail(media);
+      for (const comment of media.comments?.data ?? []) {
+        comments.push({
+          mediaId: media.id,
+          commentId: comment.id,
+          body: comment.text ?? "",
+          authorExternalId: comment.from?.id ?? comment.username ?? "unknown",
+          authorDisplayName:
+            comment.from?.username ?? comment.from?.name ?? comment.username,
+          parentId: comment.parent_id,
+          occurredAt: parseGraphTime(comment.timestamp),
+          caption: media.caption,
+          permalink: media.permalink,
+          thumbnailUrl,
+          mediaType: media.media_type,
+          legacyId: comment.legacy_instagram_comment_id,
+        });
+      }
+    }
+
+    after = response.paging?.cursors?.after;
+    if (!after) {
+      break;
     }
   }
+
   return comments;
 }
 

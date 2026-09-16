@@ -40,7 +40,7 @@ export {
 } from "./channels";
 export { completeMetaOAuth, startMetaOAuth } from "./meta";
 export { ingestWebhook, processInboundEvent } from "./inbound";
-export { syncInstagramComments } from "./sync";
+export { syncInstagramComments, syncAllInstagramComments } from "./sync";
 export {
   humanModerate,
   humanReplyToComment,
