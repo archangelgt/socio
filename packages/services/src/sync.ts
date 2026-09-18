@@ -198,7 +198,7 @@ function instagramAdvancedAccessHelp(accountLabel: string): string {
 }
 
 function instagramEmptySyncHelp(accountLabel: string): string {
-  return `${accountLabel}: Meta returned 0 Instagram conversations. Customer DMs (like a new “hey”) stay invisible until instagram_manage_messages has Advanced Access, or the sender is an App Tester/Admin. Also confirm Instagram → Connected tools → Allow access to messages is ON.`;
+  return `${accountLabel}: Meta returned 0 Instagram conversations for this Page. A Page token can include instagram_manage_messages without the app having Advanced Access in Live mode — check Meta App Dashboard → App Review → Permissions and features → instagram_manage_messages is Advanced Access + app is Live. Also: Instagram → Connected tools → Allow access to messages ON, and test by messaging from an App Tester account.`;
 }
 
 function resolvePageAccessToken(
