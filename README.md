@@ -40,6 +40,8 @@ Everything runs in Docker containers on droplet **socio** (`146.190.132.169`). `
 ./scripts/deploy.sh
 ```
 
+GitHub Actions deploy (push to `main` or **Actions → Deploy → Run workflow**) needs secret `DEPLOY_SSH_KEY` (private key whose public key is in `root@146.190.132.169` `authorized_keys`).
+
 Ritual (commit + push + deploy): say **ritual**.
 
 ## Repo layout
