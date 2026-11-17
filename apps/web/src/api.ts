@@ -89,6 +89,71 @@ export const api = {
       organizationId,
       body,
     }),
+  members: (organizationId: string) =>
+    request<{
+      members: {
+        membershipId: string;
+        userId: string;
+        email: string;
+        name: string;
+        role: string;
+        clientIds: string[] | null;
+      }[];
+    }>("/api/v1/members", { organizationId }),
+  addMember: (
+    organizationId: string,
+    body: { email: string; role: string; clientIds?: string[] },
+  ) =>
+    request<{
+      member: {
+        membershipId: string;
+        userId: string;
+        email: string;
+        name: string;
+        role: string;
+        clientIds: string[] | null;
+      };
+    }>("/api/v1/members", {
+      method: "POST",
+      organizationId,
+      body,
+    }),
+  updateMemberRole: (
+    organizationId: string,
+    membershipId: string,
+    role: string,
+  ) =>
+    request<{
+      member: {
+        membershipId: string;
+        userId: string;
+        email: string;
+        name: string;
+        role: string;
+        clientIds: string[] | null;
+      };
+    }>(`/api/v1/members/${membershipId}`, {
+      method: "PATCH",
+      organizationId,
+      body: { role },
+    }),
+  removeMember: (organizationId: string, membershipId: string) =>
+    request<{ ok: boolean }>(`/api/v1/members/${membershipId}`, {
+      method: "DELETE",
+      organizationId,
+    }),
+  setMemberScopes: (
+    organizationId: string,
+    membershipId: string,
+    clientIds: string[],
+  ) =>
+    request<{
+      scope: { membershipId: string; clientIds: string[] | null };
+    }>(`/api/v1/memberships/${membershipId}/scopes`, {
+      method: "PUT",
+      organizationId,
+      body: { clientIds },
+    }),
   brands: (organizationId: string, clientId?: string) =>
     request<{
       brands: { id: string; name: string; slug: string; clientId: string }[];

@@ -40,6 +40,14 @@ export {
   listClients,
 } from "./clients";
 export {
+  addOrganizationMember,
+  listOrganizationMembers,
+  removeOrganizationMember,
+  setMembershipClientScopes,
+  updateOrganizationMemberRole,
+  type OrganizationMember,
+} from "./members";
+export {
   connectMockChannel,
   disconnectChannel,
   listBrands,

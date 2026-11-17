@@ -31,13 +31,15 @@ POST /api/v1/auth/invitations/:token/accept
 
 ```text
 GET    /api/v1/organizations
-POST   /api/v1/organizations
-GET    /api/v1/organizations/:id
-PATCH  /api/v1/organizations/:id
-GET    /api/v1/organizations/:id/members
-POST   /api/v1/organizations/:id/invitations
-DELETE /api/v1/organizations/:id/members/:userId
+GET    /api/v1/members
+POST   /api/v1/members
+PATCH  /api/v1/members/:membershipId
+DELETE /api/v1/members/:membershipId
 ```
+
+Members routes use the active org (`X-Organization-Id`) and require ADMIN+.
+`POST /members` adds an existing user by email (optional `clientIds` for scopes).
+`PATCH` updates role. Empty `clientIds` on scope replace means org-wide access.
 
 ## Clients
 
@@ -45,11 +47,13 @@ DELETE /api/v1/organizations/:id/members/:userId
 GET   /api/v1/clients
 POST  /api/v1/clients
 POST  /api/v1/memberships/:membershipId/scopes
+PUT   /api/v1/memberships/:membershipId/scopes
 ```
 
 List/create clients for the active organization. Responses respect `membership_scopes`
-(OWNER/ADMIN with no scopes see all clients). Optional query `clientId` on brand/channel/inbox
-list routes further narrows results; server still enforces scopes.
+(OWNER/ADMIN with no scopes see all clients). `PUT .../scopes` replaces the full
+client grant list (`clientIds: []` = org-wide). Optional query `clientId` on
+brand/channel/inbox list routes further narrows results; server still enforces scopes.
 
 ## Brands
 

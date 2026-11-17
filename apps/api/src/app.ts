@@ -7,6 +7,7 @@ import {
   AppError,
   type MetaConfig,
   type ServiceContext,
+  addOrganizationMember,
   assertBrandInAccess,
   checkoutConfigFromEnv,
   clientAccessFromMembership,
@@ -30,13 +31,17 @@ import {
   listComments,
   listConversations,
   listModerationQueue,
+  listOrganizationMembers,
   loginUser,
   logoutSession,
   registerUser,
+  removeOrganizationMember,
   requireMembership,
   resolveSession,
+  setMembershipClientScopes,
   startMetaOAuth,
   syncInstagramComments,
+  updateOrganizationMemberRole,
 } from "@social-ai/services";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { ZodError, z } from "zod";
@@ -336,6 +341,109 @@ export async function buildApp(options: AppOptions) {
       actorRole: membership.role,
     });
     return { scope };
+  });
+
+  app.put("/api/v1/memberships/:membershipId/scopes", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "ADMIN",
+    );
+    const params = z
+      .object({ membershipId: z.string().uuid() })
+      .parse(request.params);
+    const body = z
+      .object({ clientIds: z.array(z.string().uuid()) })
+      .parse(request.body);
+    const scope = await setMembershipClientScopes(ctx.db, {
+      organizationId: membership.organizationId,
+      membershipId: params.membershipId,
+      actorRole: membership.role,
+      clientIds: body.clientIds,
+    });
+    return { scope };
+  });
+
+  app.get("/api/v1/members", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "ADMIN",
+    );
+    return {
+      members: await listOrganizationMembers(
+        ctx.db,
+        membership.organizationId,
+        membership.role,
+      ),
+    };
+  });
+
+  app.post("/api/v1/members", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "ADMIN",
+    );
+    const body = z
+      .object({
+        email: z.string().email(),
+        role: z.string().min(1),
+        clientIds: z.array(z.string().uuid()).optional(),
+      })
+      .parse(request.body);
+    const member = await addOrganizationMember(ctx.db, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      actorRole: membership.role,
+      email: body.email,
+      role: body.role,
+      clientIds: body.clientIds,
+    });
+    return { member };
+  });
+
+  app.patch("/api/v1/members/:membershipId", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "ADMIN",
+    );
+    const params = z
+      .object({ membershipId: z.string().uuid() })
+      .parse(request.params);
+    const body = z.object({ role: z.string().min(1) }).parse(request.body);
+    const member = await updateOrganizationMemberRole(ctx.db, {
+      organizationId: membership.organizationId,
+      membershipId: params.membershipId,
+      actorId: session.user.id,
+      actorRole: membership.role,
+      role: body.role,
+    });
+    return { member };
+  });
+
+  app.delete("/api/v1/members/:membershipId", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "ADMIN",
+    );
+    const params = z
+      .object({ membershipId: z.string().uuid() })
+      .parse(request.params);
+    await removeOrganizationMember(ctx.db, {
+      organizationId: membership.organizationId,
+      membershipId: params.membershipId,
+      actorId: session.user.id,
+      actorRole: membership.role,
+    });
+    return { ok: true };
   });
 
   app.get("/api/v1/brands", async (request) => {

@@ -515,6 +515,56 @@ nav button.active {
   font: inherit;
 }
 
+.role-line {
+  margin: 0 0 0.75rem !important;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.team-panel {
+  margin-top: 1rem;
+}
+
+.team-form {
+  display: grid;
+  gap: 0.85rem;
+  max-width: 32rem;
+}
+
+.team-form label,
+.scope-fieldset {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+}
+
+.team-form input,
+.team-form select,
+.scope-multi {
+  border: 1px solid rgb(15 23 42 / 12%);
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--white);
+}
+
+.scope-fieldset {
+  border: 1px solid rgb(15 23 42 / 10%);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+}
+
+.scope-option {
+  display: flex !important;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.scope-multi {
+  min-height: 5.5rem;
+  width: min(16rem, 100%);
+}
+
 .account button,
 form button[type="submit"],
 .button-row > button,
