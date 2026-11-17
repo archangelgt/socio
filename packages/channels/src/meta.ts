@@ -91,9 +91,11 @@ export class MetaChannelAdapter implements ChannelAdapter {
     throw new UnsupportedChannelActionError("sendMessage", this.provider);
   }
 
-  async hideComment(
-    input: HideCommentInput,
-  ): Promise<{ ok: true; externalActionId: string; externalCommentId: string }> {
+  async hideComment(input: HideCommentInput): Promise<{
+    ok: true;
+    externalActionId: string;
+    externalCommentId: string;
+  }> {
     const accessToken = requireToken(input);
     const network = networkOf(input);
     if (network === "facebook") {
@@ -126,9 +128,11 @@ export class MetaChannelAdapter implements ChannelAdapter {
     };
   }
 
-  async unhideComment(
-    input: UnhideCommentInput,
-  ): Promise<{ ok: true; externalActionId: string; externalCommentId: string }> {
+  async unhideComment(input: UnhideCommentInput): Promise<{
+    ok: true;
+    externalActionId: string;
+    externalCommentId: string;
+  }> {
     const accessToken = requireToken(input);
     const network = networkOf(input);
     if (network === "facebook") {
