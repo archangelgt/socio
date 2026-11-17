@@ -40,14 +40,18 @@ import {
   listInvitations,
   listModerationQueue,
   listOrganizationMembers,
+  listPieceDestinations,
   loginUser,
   logoutSession,
   overrideCommentUrgency,
   previewInvitation,
+  processDuePublishDestinations,
   registerUser,
   removeOrganizationMember,
   requireMembership,
   resolveSession,
+  retryFailedDestination,
+  schedulePiecePublish,
   setMembershipClientScopes,
   startMetaOAuth,
   syncInstagramComments,
@@ -579,6 +583,7 @@ export async function buildApp(options: AppOptions) {
         brandId: z.string().uuid().optional(),
         title: z.string().min(1),
         copyText: z.string().optional(),
+        imageUrl: z.string().url().optional(),
         scheduledAt: z.string().optional().nullable(),
         timezone: z.string().optional(),
       })
@@ -592,6 +597,7 @@ export async function buildApp(options: AppOptions) {
       brandId: body.brandId,
       title: body.title,
       copyText: body.copyText,
+      imageUrl: body.imageUrl,
       scheduledAt: body.scheduledAt,
       timezone: body.timezone,
     });
@@ -617,6 +623,74 @@ export async function buildApp(options: AppOptions) {
       status: body.status,
     });
     return { piece };
+  });
+
+  app.post("/api/v1/calendar/pieces/:id/publish", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MANAGER",
+    );
+    const access = clientAccessFromMembership(membership);
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z
+      .object({
+        socialAccountIds: z.array(z.string().uuid()).min(1),
+        publishNow: z.boolean().optional(),
+      })
+      .parse(request.body);
+    return schedulePiecePublish(ctx, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      role: membership.role,
+      access,
+      pieceId: params.id,
+      socialAccountIds: body.socialAccountIds,
+      publishNow: body.publishNow,
+    });
+  });
+
+  app.get("/api/v1/calendar/pieces/:id/destinations", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "VIEWER",
+    );
+    const access = clientAccessFromMembership(membership);
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    return {
+      destinations: await listPieceDestinations(ctx, {
+        organizationId: membership.organizationId,
+        access,
+        pieceId: params.id,
+      }),
+    };
+  });
+
+  app.post("/api/v1/calendar/destinations/:id/retry", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MANAGER",
+    );
+    const access = clientAccessFromMembership(membership);
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    return retryFailedDestination(ctx, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      role: membership.role,
+      access,
+      destinationId: params.id,
+    });
+  });
+
+  app.post("/api/v1/calendar/publish/due", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    requireMembership(session.memberships, orgId(request), "MANAGER");
+    return processDuePublishDestinations(ctx);
   });
 
   app.post("/api/v1/calendar/share-links", async (request) => {

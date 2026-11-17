@@ -91,6 +91,11 @@ export const contentPieceStatusEnum = pgEnum("content_piece_status", [
   "approved",
 ]);
 
+export const publishDestinationStatusEnum = pgEnum(
+  "publish_destination_status",
+  ["scheduled", "publishing", "published", "failed", "needs_mobile"],
+);
+
 export const caseKindEnum = pgEnum("case_kind", [
   "none",
   "attention",
@@ -797,3 +802,46 @@ export const monthShareFeedback = pgTable("month_share_feedback", {
     .defaultNow()
     .notNull(),
 });
+
+export const contentPieceDestinations = pgTable(
+  "content_piece_destinations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    contentPieceId: uuid("content_piece_id")
+      .notNull()
+      .references(() => contentPieces.id),
+    contentPieceVersion: integer("content_piece_version").notNull().default(1),
+    socialAccountId: uuid("social_account_id")
+      .notNull()
+      .references(() => socialAccounts.id),
+    provider: text("provider").notNull(),
+    status: publishDestinationStatusEnum("status")
+      .notNull()
+      .default("scheduled"),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    timezone: text("timezone").notNull().default("America/Guatemala"),
+    externalPostId: text("external_post_id"),
+    permalink: text("permalink"),
+    lastError: text("last_error"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    unique("content_piece_destinations_piece_account").on(
+      table.contentPieceId,
+      table.socialAccountId,
+    ),
+    index("content_piece_destinations_due_idx").on(
+      table.status,
+      table.scheduledAt,
+    ),
+    index("content_piece_destinations_org_piece_idx").on(
+      table.organizationId,
+      table.contentPieceId,
+    ),
+  ],
+);

@@ -2,12 +2,14 @@ import type {
   QUEUE_INBOUND_EVENTS,
   QUEUE_MODERATION,
   QUEUE_OUTBOUND_ACTIONS,
+  QUEUE_PUBLISH_DESTINATIONS,
 } from "@social-ai/domain";
 
 export type JobName =
   | typeof QUEUE_INBOUND_EVENTS
   | typeof QUEUE_MODERATION
-  | typeof QUEUE_OUTBOUND_ACTIONS;
+  | typeof QUEUE_OUTBOUND_ACTIONS
+  | typeof QUEUE_PUBLISH_DESTINATIONS;
 
 export type JobQueue = {
   add(name: JobName, data: { id: string }): Promise<void>;

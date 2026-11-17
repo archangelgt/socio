@@ -17,6 +17,7 @@ export {
   QUEUE_INBOUND_EVENTS,
   QUEUE_MODERATION,
   QUEUE_OUTBOUND_ACTIONS,
+  QUEUE_PUBLISH_DESTINATIONS,
   type ActionSource,
 } from "./queues";
 export {

@@ -206,6 +206,7 @@ export const api = {
       clientId: string;
       title: string;
       copyText?: string;
+      imageUrl?: string;
       scheduledAt?: string;
     },
   ) =>
@@ -228,6 +229,36 @@ export const api = {
         organizationId,
         body: { status },
       },
+    ),
+  publishPiece: (
+    organizationId: string,
+    pieceId: string,
+    body: { socialAccountIds: string[]; publishNow?: boolean },
+  ) =>
+    request<{
+      destinations: { id: string; status: string; provider: string }[];
+    }>(`/api/v1/calendar/pieces/${pieceId}/publish`, {
+      method: "POST",
+      organizationId,
+      body,
+    }),
+  pieceDestinations: (organizationId: string, pieceId: string) =>
+    request<{
+      destinations: {
+        id: string;
+        status: string;
+        provider: string;
+        displayName: string;
+        permalink: string | null;
+        lastError: string | null;
+      }[];
+    }>(`/api/v1/calendar/pieces/${pieceId}/destinations`, {
+      organizationId,
+    }),
+  retryDestination: (organizationId: string, destinationId: string) =>
+    request<{ ok: boolean }>(
+      `/api/v1/calendar/destinations/${destinationId}/retry`,
+      { method: "POST", organizationId },
     ),
   createShareLink: (
     organizationId: string,

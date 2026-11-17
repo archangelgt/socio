@@ -27,7 +27,7 @@ const META_CAPABILITIES: ChannelCapabilities = {
   deleteComments: false,
   replyToComments: false,
   sendMessages: false,
-  publishPosts: false,
+  publishPosts: true,
 };
 
 export type MetaAdapterConfig = MetaGraphConfig & {
@@ -169,8 +169,89 @@ export class MetaChannelAdapter implements ChannelAdapter {
     throw new UnsupportedChannelActionError("deleteComment", this.provider);
   }
 
-  async publish(_input: PublishInput): Promise<never> {
-    throw new UnsupportedChannelActionError("publish", this.provider);
+  async publish(input: PublishInput): Promise<{
+    ok: boolean;
+    externalPostId?: string;
+    permalink?: string;
+    needsMobile?: boolean;
+  }> {
+    const accessToken = requireToken(input);
+    const network = networkOf(input);
+    const body = input.body?.trim() ?? "";
+
+    if (network === "facebook") {
+      if (input.imageUrl) {
+        const photo = await graphRequest<{ id?: string; post_id?: string }>(
+          this.config,
+          {
+            method: "POST",
+            path: `/${input.accountId}/photos`,
+            accessToken,
+            body: {
+              url: input.imageUrl,
+              caption: body,
+              published: "true",
+            },
+          },
+        );
+        const externalPostId = photo.post_id ?? photo.id;
+        return {
+          ok: true,
+          externalPostId,
+          permalink: externalPostId
+            ? `https://www.facebook.com/${externalPostId}`
+            : undefined,
+        };
+      }
+
+      const feed = await graphRequest<{ id?: string }>(this.config, {
+        method: "POST",
+        path: `/${input.accountId}/feed`,
+        accessToken,
+        body: { message: body },
+      });
+      return {
+        ok: true,
+        externalPostId: feed.id,
+        permalink: feed.id ? `https://www.facebook.com/${feed.id}` : undefined,
+      };
+    }
+
+    // Instagram Graph publishing requires a public image URL for feed posts.
+    if (!input.imageUrl) {
+      return { ok: false, needsMobile: true };
+    }
+
+    const creation = await graphRequest<{ id?: string }>(this.config, {
+      method: "POST",
+      path: `/${input.accountId}/media`,
+      accessToken,
+      body: {
+        image_url: input.imageUrl,
+        caption: body,
+      },
+    });
+    if (!creation.id) {
+      throw new ChannelProviderError(
+        "unknown",
+        "Instagram media creation returned no id.",
+      );
+    }
+
+    const published = await graphRequest<{ id?: string }>(this.config, {
+      method: "POST",
+      path: `/${input.accountId}/media_publish`,
+      accessToken,
+      body: { creation_id: creation.id },
+    });
+
+    return {
+      ok: true,
+      externalPostId: published.id,
+      permalink: published.id
+        ? `https://www.instagram.com/p/${published.id}/`
+        : undefined,
+    };
   }
 
   async getComment(input: {

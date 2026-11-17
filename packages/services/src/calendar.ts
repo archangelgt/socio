@@ -84,6 +84,7 @@ export async function createContentPiece(
     brandId?: string;
     title: string;
     copyText?: string;
+    imageUrl?: string;
     scheduledAt?: string | null;
     timezone?: string;
   },
@@ -112,11 +113,16 @@ export async function createContentPiece(
     throw new AppError(500, "PIECE_CREATE_FAILED", "Could not create piece.");
   }
 
+  const mediaJson = input.imageUrl?.trim()
+    ? [{ type: "image", url: input.imageUrl.trim() }]
+    : [];
+
   await db.insert(contentPieceVersions).values({
     organizationId: input.organizationId,
     contentPieceId: piece.id,
     version: 1,
     copyText: input.copyText?.trim() ?? "",
+    mediaJson,
     createdByUserId: input.actorId,
   });
 

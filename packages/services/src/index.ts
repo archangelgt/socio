@@ -62,6 +62,13 @@ export {
   updateContentPieceStatus,
 } from "./calendar";
 export {
+  listPieceDestinations,
+  processDuePublishDestinations,
+  processPublishDestination,
+  retryFailedDestination,
+  schedulePiecePublish,
+} from "./publish";
+export {
   connectMockChannel,
   disconnectChannel,
   listBrands,
