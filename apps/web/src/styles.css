@@ -565,6 +565,45 @@ nav button.active {
   width: min(16rem, 100%);
 }
 
+.page-header-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.urgency-pill {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  margin-right: 0.35rem;
+}
+
+.urgency-red {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.urgency-yellow {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.urgency-green {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.urgency-select {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+}
+
 .account button,
 form button[type="submit"],
 .button-row > button,

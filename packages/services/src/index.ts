@@ -48,6 +48,20 @@ export {
   type OrganizationMember,
 } from "./members";
 export {
+  acceptInvitation,
+  createInvitation,
+  listInvitations,
+  previewInvitation,
+} from "./invitations";
+export {
+  addShareFeedback,
+  createContentPiece,
+  createMonthShareLink,
+  getSharedMonth,
+  listContentPieces,
+  updateContentPieceStatus,
+} from "./calendar";
+export {
   connectMockChannel,
   disconnectChannel,
   listBrands,
@@ -67,6 +81,7 @@ export { syncInstagramComments } from "./sync";
 export {
   humanModerate,
   listModerationQueue,
+  overrideCommentUrgency,
   processModeration,
 } from "./moderate";
 export { processOutboundAction } from "./outbound";

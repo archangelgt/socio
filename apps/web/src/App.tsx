@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
+import { CalendarPage } from "./CalendarPage";
+import { InvitePage, ShareMonthPage } from "./GuestPages";
 import { Mascot } from "./Mascot";
 import { type ClientRow, type Session, api } from "./api";
 import { MarketingSite } from "./marketing/MarketingSite";
 import { t } from "./marketing/copy";
 import { detectLocale, href, navigate, parseRoute } from "./marketing/route";
 
-type Page = "inbox" | "moderation" | "channels" | "team";
+type Page = "inbox" | "moderation" | "channels" | "team" | "calendar";
 
 const ORG_STORAGE_KEY = "socio.activeOrganizationId";
 const MEMBER_ROLES = [
@@ -246,6 +248,29 @@ function ChannelIcon() {
         d="M8.8 9.4 10.6 14.4M15.2 9.4 13.4 14.4"
         stroke="currentColor"
         strokeWidth="1.7"
+      />
+    </svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <title>Calendar</title>
+      <rect
+        x="4"
+        y="5"
+        width="16"
+        height="15"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M8 3.5v3M16 3.5v3M4 9.5h16"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
       />
     </svg>
   );
@@ -508,6 +533,23 @@ export function App() {
     );
   }
 
+  if (route.kind === "share") {
+    return <ShareMonthPage token={route.token} />;
+  }
+
+  if (route.kind === "invite") {
+    return (
+      <InvitePage
+        token={route.token}
+        session={session}
+        onAccepted={(next) => {
+          setSession(next);
+          navigate("/app");
+        }}
+      />
+    );
+  }
+
   if (route.kind === "login") {
     return (
       <AuthScreen
@@ -575,6 +617,14 @@ export function App() {
           >
             <ChannelIcon />
             Channels
+          </button>
+          <button
+            type="button"
+            className={page === "calendar" ? "active" : ""}
+            onClick={() => setPage("calendar")}
+          >
+            <CalendarIcon />
+            Calendar
           </button>
           {canManageAccess(activeMembership?.role) ? (
             <button
@@ -663,6 +713,13 @@ export function App() {
         ) : null}
         {page === "channels" && organizationId && clientId ? (
           <ChannelsPage
+            organizationId={organizationId}
+            clientId={clientId}
+            setError={setError}
+          />
+        ) : null}
+        {page === "calendar" && organizationId && clientId ? (
+          <CalendarPage
             organizationId={organizationId}
             clientId={clientId}
             setError={setError}
@@ -889,7 +946,7 @@ function ModerationPage({
                 <th>Comment</th>
                 <th>When</th>
                 <th>Status</th>
-                <th>Severity</th>
+                <th>Urgency</th>
                 <th>Confidence</th>
                 <th />
               </tr>
@@ -905,6 +962,9 @@ function ModerationPage({
                         <div>
                           <strong>{item.authorDisplayName ?? "Unknown"}</strong>
                           <div>{item.body}</div>
+                          {item.caseKind && item.caseKind !== "none" ? (
+                            <div className="muted">Case: {item.caseKind}</div>
+                          ) : null}
                           {item.rationale ? (
                             <div className="muted">{item.rationale}</div>
                           ) : null}
@@ -919,7 +979,38 @@ function ModerationPage({
                     <td>
                       <StatusBadge status={status} />
                     </td>
-                    <td>{item.severity ?? "—"}</td>
+                    <td>
+                      <span
+                        className={`urgency-pill urgency-${(item.urgency ?? "GREEN").toLowerCase()}`}
+                      >
+                        {item.urgency ?? "GREEN"}
+                      </span>
+                      <select
+                        className="urgency-select"
+                        value={item.urgency ?? "GREEN"}
+                        onChange={(event) => {
+                          const reason = window.prompt(
+                            "Reason for urgency change?",
+                          );
+                          if (!reason) {
+                            return;
+                          }
+                          void api
+                            .setUrgency(
+                              organizationId,
+                              item.commentId,
+                              event.target.value,
+                              reason,
+                            )
+                            .then(reload)
+                            .catch((err: Error) => setError(err.message));
+                        }}
+                      >
+                        <option value="RED">RED</option>
+                        <option value="YELLOW">YELLOW</option>
+                        <option value="GREEN">GREEN</option>
+                      </select>
+                    </td>
                     <td>
                       {item.confidence !== null
                         ? `${Math.round(item.confidence * 100)}%`
@@ -1297,6 +1388,61 @@ function TeamPage({
           whole workspace. Restrict a member to specific clients for isolation.
         </p>
       </header>
+
+      <section className="panel team-panel">
+        <h2>Invite by email</h2>
+        <p className="muted">
+          Creates a token link. Existing users can also be added directly below.
+        </p>
+        <form
+          className="team-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setBusy(true);
+            void api
+              .createInvitation(organizationId, {
+                email,
+                role,
+                clientIds:
+                  scopeClientIds.length > 0 ? scopeClientIds : undefined,
+              })
+              .then((data) => {
+                const url = `${window.location.origin}/invite/${data.invitation.token}`;
+                window.prompt("Copy invite link", url);
+                setEmail("");
+                setError(null);
+              })
+              .catch((err: Error) => setError(err.message))
+              .finally(() => setBusy(false));
+          }}
+        >
+          <label>
+            Email
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </label>
+          <label>
+            Role
+            <select
+              value={role}
+              onChange={(event) => setRole(event.target.value)}
+            >
+              {MEMBER_ROLES.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" disabled={busy}>
+            Create invite link
+          </button>
+        </form>
+      </section>
 
       <section className="panel team-panel">
         <h2>Add member</h2>

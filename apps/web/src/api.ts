@@ -154,6 +154,128 @@ export const api = {
       organizationId,
       body: { clientIds },
     }),
+  createInvitation: (
+    organizationId: string,
+    body: { email: string; role: string; clientIds?: string[] },
+  ) =>
+    request<{
+      invitation: {
+        id: string;
+        email: string;
+        role: string;
+        token: string;
+        expiresAt: string;
+      };
+    }>("/api/v1/invitations", {
+      method: "POST",
+      organizationId,
+      body,
+    }),
+  previewInvitation: (token: string) =>
+    request<{
+      invitation: { email: string; role: string; organizationId: string };
+    }>(`/api/v1/auth/invitations/${token}`),
+  acceptInvitation: (token: string) =>
+    request<{
+      organizationId: string;
+      membershipId: string;
+      role: string;
+      memberships: Membership[];
+    }>(`/api/v1/auth/invitations/${token}/accept`, { method: "POST" }),
+  calendarPieces: (
+    organizationId: string,
+    clientId: string,
+    yearMonth: string,
+  ) =>
+    request<{
+      pieces: {
+        id: string;
+        title: string;
+        status: string;
+        scheduledAt: string | null;
+        timezone: string;
+        currentVersion: number;
+      }[];
+    }>(
+      `/api/v1/calendar/pieces?clientId=${encodeURIComponent(clientId)}&yearMonth=${encodeURIComponent(yearMonth)}`,
+      { organizationId },
+    ),
+  createPiece: (
+    organizationId: string,
+    body: {
+      clientId: string;
+      title: string;
+      copyText?: string;
+      scheduledAt?: string;
+    },
+  ) =>
+    request<{
+      piece: { id: string; title: string; status: string };
+    }>("/api/v1/calendar/pieces", {
+      method: "POST",
+      organizationId,
+      body,
+    }),
+  updatePieceStatus: (
+    organizationId: string,
+    pieceId: string,
+    status: string,
+  ) =>
+    request<{ piece: { id: string; status: string } }>(
+      `/api/v1/calendar/pieces/${pieceId}`,
+      {
+        method: "PATCH",
+        organizationId,
+        body: { status },
+      },
+    ),
+  createShareLink: (
+    organizationId: string,
+    body: { clientId: string; yearMonth: string; label?: string },
+  ) =>
+    request<{
+      link: { id: string; yearMonth: string; token: string };
+    }>("/api/v1/calendar/share-links", {
+      method: "POST",
+      organizationId,
+      body,
+    }),
+  sharedMonth: (token: string) =>
+    request<{
+      yearMonth: string;
+      label: string | null;
+      pieces: {
+        id: string;
+        title: string;
+        status: string;
+        scheduledAt: string | null;
+      }[];
+      feedback: {
+        id: string;
+        guestName: string;
+        body: string;
+        contentPieceId: string | null;
+      }[];
+    }>(`/api/v1/share/${token}`),
+  shareFeedback: (
+    token: string,
+    body: { guestName: string; body: string; contentPieceId?: string },
+  ) =>
+    request<{ feedback: { id: string } }>(`/api/v1/share/${token}/feedback`, {
+      method: "POST",
+      body,
+    }),
+  setUrgency: (
+    organizationId: string,
+    commentId: string,
+    urgency: string,
+    reason: string,
+  ) =>
+    request(`/api/v1/comments/${commentId}/urgency`, {
+      method: "POST",
+      organizationId,
+      body: { urgency, reason },
+    }),
   brands: (organizationId: string, clientId?: string) =>
     request<{
       brands: { id: string; name: string; slug: string; clientId: string }[];
@@ -264,6 +386,9 @@ export const api = {
         moderationStatus: string;
         finalAction: string | null;
         severity: string | null;
+        urgency: string;
+        urgencyReason: string | null;
+        caseKind: string;
         confidence: number | null;
         rationale: string | null;
         createdAt: string;

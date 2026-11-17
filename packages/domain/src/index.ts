@@ -48,3 +48,11 @@ export {
   type PlanDefinition,
   type PlanId,
 } from "./plans";
+export {
+  URGENCIES,
+  caseKindFromCategories,
+  computeUrgency,
+  effectiveUrgency,
+  urgencyRank,
+  type Urgency,
+} from "./urgency";

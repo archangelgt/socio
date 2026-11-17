@@ -13,6 +13,8 @@ export type AppRoute =
   | { kind: "redirect"; to: string }
   | { kind: "login" }
   | { kind: "app" }
+  | { kind: "invite"; token: string }
+  | { kind: "share"; token: string }
   | {
       kind: "marketing";
       locale: Locale;
@@ -38,6 +40,18 @@ export function parseRoute(pathname: string, language = "es"): AppRoute {
   }
   if (clean === "/app") {
     return { kind: "app" };
+  }
+  if (clean.startsWith("/invite/")) {
+    const token = clean.slice("/invite/".length);
+    if (token) {
+      return { kind: "invite", token };
+    }
+  }
+  if (clean.startsWith("/share/")) {
+    const token = clean.slice("/share/".length);
+    if (token) {
+      return { kind: "share", token };
+    }
   }
   if (clean === "/") {
     return { kind: "redirect", to: `/${detectLocale(language)}` };

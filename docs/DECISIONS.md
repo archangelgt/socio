@@ -171,3 +171,9 @@ Decision: tenancy hierarchy is Organization → Client → Brand → SocialAccou
 
 Reason: agencies need folders per client without reinterpreting Brand as the client, and piloto isolation requires grants in the same slice as the Client entity.
 
+## ADR-026 — AndyMorales piloto expands Frozen V1
+
+Decision: for the AndyMorales Studio pilot, Socio may ship calendar pieces, guest month share links, invitations, urgency (semáforo), and later Meta publish / KB / incidents beyond the Frozen V1 wedge. Moderation Meta path remains the reliability baseline; publisher and ads stay gated on Meta matrices.
+
+Reason: product direction is AndyMorales on Socio (not a fork); the requirements MD is the pilot acceptance source.
+

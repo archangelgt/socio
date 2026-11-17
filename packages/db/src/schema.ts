@@ -81,6 +81,23 @@ export const severityEnum = pgEnum("severity", [
   "CRITICAL",
 ]);
 
+export const urgencyEnum = pgEnum("urgency", ["GREEN", "YELLOW", "RED"]);
+
+export const contentPieceStatusEnum = pgEnum("content_piece_status", [
+  "draft",
+  "internal_review",
+  "client_review",
+  "changes_requested",
+  "approved",
+]);
+
+export const caseKindEnum = pgEnum("case_kind", [
+  "none",
+  "attention",
+  "complaint",
+  "scam",
+]);
+
 export const moderationActionEnum = pgEnum("moderation_action", [
   "ALLOW",
   "FLAG",
@@ -145,6 +162,8 @@ export const invitations = pgTable("invitations", {
     .references(() => organizations.id),
   email: text("email").notNull(),
   role: membershipRoleEnum("role").notNull(),
+  /** Optional client scope grants applied on accept. Empty/null = org-wide. */
+  clientIds: jsonb("client_ids").$type<string[]>().notNull().default([]),
   tokenHash: text("token_hash").notNull(),
   invitedByUserId: uuid("invited_by_user_id")
     .notNull()
@@ -457,6 +476,12 @@ export const comments = pgTable(
       .notNull()
       .default("PENDING"),
     severity: severityEnum("severity"),
+    urgency: urgencyEnum("urgency").notNull().default("GREEN"),
+    urgencyOverride: urgencyEnum("urgency_override"),
+    urgencyReason: text("urgency_reason"),
+    caseKind: caseKindEnum("case_kind").notNull().default("none"),
+    assignedUserId: uuid("assigned_user_id").references(() => users.id),
+    attentionDueAt: timestamp("attention_due_at", { withTimezone: true }),
     aiConfidence: doublePrecision("ai_confidence"),
     language: text("language"),
     ...timestamps,
@@ -469,6 +494,11 @@ export const comments = pgTable(
     index("comments_org_moderation_idx").on(
       table.organizationId,
       table.moderationStatus,
+      table.createdAt,
+    ),
+    index("comments_org_urgency_idx").on(
+      table.organizationId,
+      table.urgency,
       table.createdAt,
     ),
   ],
@@ -658,6 +688,111 @@ export const usageEvents = pgTable("usage_events", {
   outputTokens: integer("output_tokens"),
   estimatedCostCents: integer("estimated_cost_cents"),
   latencyMs: integer("latency_ms"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const contentPieces = pgTable(
+  "content_pieces",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id),
+    brandId: uuid("brand_id").references(() => brands.id),
+    title: text("title").notNull(),
+    status: contentPieceStatusEnum("status").notNull().default("draft"),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    timezone: text("timezone").notNull().default("America/Guatemala"),
+    currentVersion: integer("current_version").notNull().default(1),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id),
+    ...timestamps,
+  },
+  (table) => [
+    index("content_pieces_org_client_scheduled_idx").on(
+      table.organizationId,
+      table.clientId,
+      table.scheduledAt,
+    ),
+    index("content_pieces_org_status_idx").on(
+      table.organizationId,
+      table.status,
+    ),
+  ],
+);
+
+export const contentPieceVersions = pgTable(
+  "content_piece_versions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    contentPieceId: uuid("content_piece_id")
+      .notNull()
+      .references(() => contentPieces.id),
+    version: integer("version").notNull(),
+    copyText: text("copy_text").notNull().default(""),
+    notesInternal: text("notes_internal").notNull().default(""),
+    notesClient: text("notes_client").notNull().default(""),
+    mediaJson: jsonb("media_json").notNull().default([]),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique("content_piece_versions_piece_version").on(
+      table.contentPieceId,
+      table.version,
+    ),
+  ],
+);
+
+export const monthShareLinks = pgTable(
+  "month_share_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id),
+    yearMonth: text("year_month").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    label: text("label"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("month_share_links_org_client_idx").on(
+      table.organizationId,
+      table.clientId,
+      table.yearMonth,
+    ),
+  ],
+);
+
+export const monthShareFeedback = pgTable("month_share_feedback", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => organizations.id),
+  monthShareLinkId: uuid("month_share_link_id")
+    .notNull()
+    .references(() => monthShareLinks.id),
+  contentPieceId: uuid("content_piece_id").references(() => contentPieces.id),
+  guestName: text("guest_name").notNull(),
+  body: text("body").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
