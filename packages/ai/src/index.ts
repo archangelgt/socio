@@ -1,3 +1,4 @@
+export { AnthropicProvider } from "./anthropic";
 export { MockAIProvider } from "./mock";
 export { OpenAICompatibleProvider } from "./openai";
 export { createAIProvider } from "./factory";
