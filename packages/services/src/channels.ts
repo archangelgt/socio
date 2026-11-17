@@ -1,9 +1,16 @@
 import { type Database, brands, socialAccounts } from "@social-ai/db";
-import { and, eq } from "drizzle-orm";
+import type { ClientAccess } from "@social-ai/domain";
+import { and, eq, inArray } from "drizzle-orm";
 import { getChannelAdapter } from "./adapters";
 import { writeAudit } from "./audit";
+import { listBrandsForAccess } from "./clients";
 import { encryptSecret } from "./crypto";
 import { AppError, isUniqueViolation } from "./errors";
+import {
+  assertBrandInAccess,
+  assertClientAllowed,
+  clientScopeIds,
+} from "./scopes";
 
 export async function connectMockChannel(
   db: Database,
@@ -14,22 +21,14 @@ export async function connectMockChannel(
     brandId: string;
     displayName: string;
     externalAccountId: string;
+    access: ClientAccess;
   },
 ) {
-  const [brand] = await db
-    .select()
-    .from(brands)
-    .where(
-      and(
-        eq(brands.id, input.brandId),
-        eq(brands.organizationId, input.organizationId),
-      ),
-    )
-    .limit(1);
-
-  if (!brand) {
-    throw new AppError(404, "BRAND_NOT_FOUND", "Brand not found.");
-  }
+  const brand = await assertBrandInAccess(db, {
+    organizationId: input.organizationId,
+    brandId: input.brandId,
+    access: input.access,
+  });
 
   getChannelAdapter("mock");
 
@@ -166,7 +165,30 @@ export async function connectMockChannel(
   }
 }
 
-export async function listChannels(db: Database, organizationId: string) {
+export async function listChannels(
+  db: Database,
+  organizationId: string,
+  access: ClientAccess,
+  clientId?: string,
+) {
+  const scope = clientScopeIds(access);
+  const filters = [
+    eq(socialAccounts.organizationId, organizationId),
+    eq(socialAccounts.status, "active"),
+  ];
+
+  if (clientId) {
+    if (scope !== null && !scope.includes(clientId)) {
+      return [];
+    }
+    filters.push(eq(brands.clientId, clientId));
+  } else if (scope !== null) {
+    if (scope.length === 0) {
+      return [];
+    }
+    filters.push(inArray(brands.clientId, scope));
+  }
+
   const rows = await db
     .select({
       id: socialAccounts.id,
@@ -175,14 +197,11 @@ export async function listChannels(db: Database, organizationId: string) {
       externalAccountId: socialAccounts.externalAccountId,
       status: socialAccounts.status,
       brandId: socialAccounts.brandId,
+      clientId: brands.clientId,
     })
     .from(socialAccounts)
-    .where(
-      and(
-        eq(socialAccounts.organizationId, organizationId),
-        eq(socialAccounts.status, "active"),
-      ),
-    );
+    .innerJoin(brands, eq(brands.id, socialAccounts.brandId))
+    .where(and(...filters));
 
   return rows;
 }
@@ -194,11 +213,21 @@ export async function disconnectChannel(
     actorId: string;
     channelId: string;
     tokenKey: string;
+    access: ClientAccess;
   },
 ) {
   const [account] = await db
-    .select()
+    .select({
+      id: socialAccounts.id,
+      provider: socialAccounts.provider,
+      displayName: socialAccounts.displayName,
+      externalAccountId: socialAccounts.externalAccountId,
+      status: socialAccounts.status,
+      brandId: socialAccounts.brandId,
+      clientId: brands.clientId,
+    })
     .from(socialAccounts)
+    .innerJoin(brands, eq(brands.id, socialAccounts.brandId))
     .where(
       and(
         eq(socialAccounts.id, input.channelId),
@@ -210,6 +239,8 @@ export async function disconnectChannel(
   if (!account) {
     throw new AppError(404, "CHANNEL_NOT_FOUND", "Channel not found.");
   }
+
+  assertClientAllowed(input.access, account.clientId);
 
   if (account.status === "disconnected") {
     return {
@@ -262,13 +293,11 @@ export async function disconnectChannel(
   };
 }
 
-export async function listBrands(db: Database, organizationId: string) {
-  return db
-    .select({
-      id: brands.id,
-      name: brands.name,
-      slug: brands.slug,
-    })
-    .from(brands)
-    .where(eq(brands.organizationId, organizationId));
+export async function listBrands(
+  db: Database,
+  organizationId: string,
+  access: ClientAccess,
+  clientId?: string,
+) {
+  return listBrandsForAccess(db, organizationId, access, clientId);
 }

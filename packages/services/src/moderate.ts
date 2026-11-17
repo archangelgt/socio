@@ -10,6 +10,7 @@ import {
   usageEvents,
 } from "@social-ai/db";
 import {
+  type ClientAccess,
   type ModerationAction,
   type ModerationCategory,
   type ModerationRule,
@@ -27,6 +28,7 @@ import type { ServiceContext } from "./context";
 import { AppError } from "./errors";
 import { enqueueOutboundAction } from "./outbound";
 import { thumbnailFromMetadata } from "./posts";
+import { assertClientAllowed, clientScopeIds } from "./scopes";
 
 function publicProviderError(error: unknown): string {
   const raw = error instanceof Error ? error.message : "Unknown error";
@@ -281,8 +283,28 @@ export async function processModeration(
 export async function listModerationQueue(
   db: Database,
   organizationId: string,
+  access: ClientAccess,
   status?: string,
+  clientId?: string,
 ) {
+  const scope = clientScopeIds(access);
+  const orphanFilters = [
+    eq(comments.organizationId, organizationId),
+    inArray(comments.moderationStatus, ["PENDING", "REVIEW_REQUIRED"]),
+    isNull(moderationDecisions.id),
+  ];
+  if (clientId) {
+    if (scope !== null && !scope.includes(clientId)) {
+      return [];
+    }
+    orphanFilters.push(eq(brands.clientId, clientId));
+  } else if (scope !== null) {
+    if (scope.length === 0) {
+      return [];
+    }
+    orphanFilters.push(inArray(brands.clientId, scope));
+  }
+
   const orphans = await db
     .select({
       id: comments.id,
@@ -290,17 +312,12 @@ export async function listModerationQueue(
       brandId: comments.brandId,
     })
     .from(comments)
+    .innerJoin(brands, eq(brands.id, comments.brandId))
     .leftJoin(
       moderationDecisions,
       eq(moderationDecisions.commentId, comments.id),
     )
-    .where(
-      and(
-        eq(comments.organizationId, organizationId),
-        inArray(comments.moderationStatus, ["PENDING", "REVIEW_REQUIRED"]),
-        isNull(moderationDecisions.id),
-      ),
-    );
+    .where(and(...orphanFilters));
 
   for (const orphan of orphans) {
     await insertFallbackDecision(db, orphan, {
@@ -314,6 +331,11 @@ export async function listModerationQueue(
     eq(moderationDecisions.organizationId, organizationId),
     eq(comments.organizationId, organizationId),
   ];
+  if (clientId) {
+    filters.push(eq(brands.clientId, clientId));
+  } else if (scope !== null) {
+    filters.push(inArray(brands.clientId, scope));
+  }
   if (status && (QUEUE_STATES as readonly string[]).includes(status)) {
     filters.push(eq(comments.moderationStatus, status as QueueState));
   }
@@ -339,6 +361,7 @@ export async function listModerationQueue(
     })
     .from(moderationDecisions)
     .innerJoin(comments, eq(comments.id, moderationDecisions.commentId))
+    .innerJoin(brands, eq(brands.id, comments.brandId))
     .leftJoin(posts, eq(posts.id, comments.postId))
     .where(and(...filters))
     .orderBy(desc(moderationDecisions.createdAt))
@@ -371,6 +394,7 @@ export async function humanModerate(
     actorId: string;
     decisionId: string;
     action: "allow" | "hide" | "restore";
+    access: ClientAccess;
   },
 ) {
   const [decision] = await ctx.db
@@ -393,8 +417,15 @@ export async function humanModerate(
   }
 
   const [comment] = await ctx.db
-    .select()
+    .select({
+      id: comments.id,
+      brandId: comments.brandId,
+      socialAccountId: comments.socialAccountId,
+      status: comments.status,
+      clientId: brands.clientId,
+    })
     .from(comments)
+    .innerJoin(brands, eq(brands.id, comments.brandId))
     .where(
       and(
         eq(comments.id, decision.commentId),
@@ -406,6 +437,7 @@ export async function humanModerate(
   if (!comment) {
     throw new AppError(404, "COMMENT_NOT_FOUND", "Comment not found.");
   }
+  assertClientAllowed(input.access, comment.clientId);
 
   const [account] = await ctx.db
     .select({

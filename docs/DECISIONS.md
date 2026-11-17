@@ -165,3 +165,9 @@ Decision: Instagram and Facebook share `MetaChannelAdapter` (`provider` on store
 
 Reason: one Meta app, one webhook URL, ADR-021 uniqueness still applies per IG user id / Page id.
 
+## ADR-025 — Client between Organization and Brand
+
+Decision: tenancy hierarchy is Organization → Client → Brand → SocialAccount. `brands.client_id` is required (backfill one `default` client per org). `organization_id` remains denormalized on brands. Optional `membership_scopes` restrict a membership to client(s); OWNER/ADMIN with no scopes retain org-wide access. List APIs enforce scopes server-side.
+
+Reason: agencies need folders per client without reinterpreting Brand as the client, and piloto isolation requires grants in the same slice as the Client entity.
+

@@ -2,17 +2,19 @@ import {
   ChannelProviderError,
   listInstagramMediaComments,
 } from "@social-ai/channels";
-import { inboundEvents, socialAccounts } from "@social-ai/db";
-import { QUEUE_INBOUND_EVENTS } from "@social-ai/domain";
-import { and, eq } from "drizzle-orm";
+import { brands, inboundEvents, socialAccounts } from "@social-ai/db";
+import { type ClientAccess, QUEUE_INBOUND_EVENTS } from "@social-ai/domain";
+import { and, eq, inArray } from "drizzle-orm";
 import type { ServiceContext } from "./context";
 import { decryptSecret } from "./crypto";
 import { AppError } from "./errors";
 import { upsertSocialPost } from "./posts";
+import { clientScopeIds } from "./scopes";
 
 export async function syncInstagramComments(
   ctx: ServiceContext,
   organizationId: string,
+  access: ClientAccess,
 ): Promise<{ ingested: number; seen: number }> {
   if (!ctx.meta) {
     throw new AppError(
@@ -22,21 +24,29 @@ export async function syncInstagramComments(
     );
   }
 
+  const scope = clientScopeIds(access);
+  const filters = [
+    eq(socialAccounts.organizationId, organizationId),
+    eq(socialAccounts.provider, "instagram"),
+    eq(socialAccounts.status, "active"),
+  ];
+  if (scope !== null) {
+    if (scope.length === 0) {
+      return { ingested: 0, seen: 0 };
+    }
+    filters.push(inArray(brands.clientId, scope));
+  }
+
   const accounts = await ctx.db
-    .select()
+    .select({ account: socialAccounts })
     .from(socialAccounts)
-    .where(
-      and(
-        eq(socialAccounts.organizationId, organizationId),
-        eq(socialAccounts.provider, "instagram"),
-        eq(socialAccounts.status, "active"),
-      ),
-    );
+    .innerJoin(brands, eq(brands.id, socialAccounts.brandId))
+    .where(and(...filters));
 
   let ingested = 0;
   let seen = 0;
 
-  for (const account of accounts) {
+  for (const { account } of accounts) {
     let comments: Awaited<ReturnType<typeof listInstagramMediaComments>>;
     try {
       comments = await listInstagramMediaComments(ctx.meta, {

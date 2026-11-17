@@ -1,7 +1,17 @@
 export type Membership = {
+  membershipId: string;
   organizationId: string;
   organizationName: string;
   role: string;
+  /** null = all clients in the org */
+  clientIds: string[] | null;
+};
+
+export type ClientRow = {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
 };
 
 export type Session = {
@@ -68,11 +78,25 @@ export const api = {
   login: (body: { email: string; password: string }) =>
     request<Session>("/api/v1/auth/login", { method: "POST", body }),
   logout: () => request("/api/v1/auth/logout", { method: "POST" }),
-  brands: (organizationId: string) =>
-    request<{ brands: { id: string; name: string }[] }>("/api/v1/brands", {
+  clients: (organizationId: string) =>
+    request<{ clients: ClientRow[] }>("/api/v1/clients", { organizationId }),
+  createClient: (
+    organizationId: string,
+    body: { name: string; slug?: string },
+  ) =>
+    request<{ client: ClientRow }>("/api/v1/clients", {
+      method: "POST",
       organizationId,
+      body,
     }),
-  channels: (organizationId: string) =>
+  brands: (organizationId: string, clientId?: string) =>
+    request<{
+      brands: { id: string; name: string; slug: string; clientId: string }[];
+    }>(
+      `/api/v1/brands${clientId ? `?clientId=${encodeURIComponent(clientId)}` : ""}`,
+      { organizationId },
+    ),
+  channels: (organizationId: string, clientId?: string) =>
     request<{
       channels: {
         id: string;
@@ -81,8 +105,12 @@ export const api = {
         externalAccountId: string;
         status: string;
         brandId: string;
+        clientId: string;
       }[];
-    }>("/api/v1/channels", { organizationId }),
+    }>(
+      `/api/v1/channels${clientId ? `?clientId=${encodeURIComponent(clientId)}` : ""}`,
+      { organizationId },
+    ),
   connectMock: (
     organizationId: string,
     body: { brandId: string; displayName: string; externalAccountId: string },
@@ -112,7 +140,7 @@ export const api = {
       method: "DELETE",
       organizationId,
     }),
-  comments: (organizationId: string) =>
+  comments: (organizationId: string, clientId?: string) =>
     request<{
       comments: {
         id: string;
@@ -128,13 +156,16 @@ export const api = {
         postThumbnailUrl: string | null;
         postId: string | null;
       }[];
-    }>("/api/v1/comments", { organizationId }),
+    }>(
+      `/api/v1/comments${clientId ? `?clientId=${encodeURIComponent(clientId)}` : ""}`,
+      { organizationId },
+    ),
   syncComments: (organizationId: string) =>
     request<{ ingested: number; seen: number }>("/api/v1/comments/sync", {
       method: "POST",
       organizationId,
     }),
-  conversations: (organizationId: string) =>
+  conversations: (organizationId: string, clientId?: string) =>
     request<{
       conversations: {
         id: string;
@@ -145,9 +176,20 @@ export const api = {
         socialAccountId: string;
         lastMessageBody: string | null;
       }[];
-    }>("/api/v1/conversations", { organizationId }),
-  queue: (organizationId: string, status?: string) =>
-    request<{
+    }>(
+      `/api/v1/conversations${clientId ? `?clientId=${encodeURIComponent(clientId)}` : ""}`,
+      { organizationId },
+    ),
+  queue: (organizationId: string, status?: string, clientId?: string) => {
+    const params = new URLSearchParams();
+    if (status) {
+      params.set("status", status);
+    }
+    if (clientId) {
+      params.set("clientId", clientId);
+    }
+    const query = params.toString();
+    return request<{
       items: {
         decisionId: string;
         commentId: string;
@@ -164,9 +206,10 @@ export const api = {
         postThumbnailUrl: string | null;
         postPermalink: string | null;
       }[];
-    }>(`/api/v1/moderation/queue${status ? `?status=${status}` : ""}`, {
+    }>(`/api/v1/moderation/queue${query ? `?${query}` : ""}`, {
       organizationId,
-    }),
+    });
+  },
   allow: (organizationId: string, id: string) =>
     request(`/api/v1/moderation/decisions/${id}/allow`, {
       method: "POST",

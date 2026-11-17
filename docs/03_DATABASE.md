@@ -12,11 +12,16 @@ users
 sessions
 invitations
 memberships
+clients
+membership_scopes
 brands
 social_accounts
 ```
 
+Hierarchy: Organization → Client → Brand → SocialAccount.
+
 Every lookup of tenant data takes `{ organizationId, id }`. Never `findX(id)` alone.
+Client isolation for members uses `membership_scopes` (optional grants per membership).
 
 ## organizations
 
@@ -72,10 +77,39 @@ Every lookup of tenant data takes `{ organizationId, id }`. Never `findX(id)` al
 
 Unique: `organization_id + user_id`
 
+## clients
+
+- id
+- organization_id
+- name
+- slug
+- status (default `active`)
+- created_at
+- updated_at
+
+Unique: `organization_id + slug`
+
+Agency folder for brands. Register creates a `default` client; existing orgs backfill one `default` client.
+
+## membership_scopes
+
+- id
+- membership_id
+- organization_id (denormalized)
+- client_id
+- brand_id (nullable; reserved)
+- social_account_id (nullable; reserved)
+- created_at
+
+Unique: `membership_id + client_id`
+
+Zero rows for a membership = org-wide access (OWNER/ADMIN explicit; other roles backward-compatible). Rows restrict that membership to the listed client(s).
+
 ## brands
 
 - id
 - organization_id
+- client_id
 - name
 - slug
 - description
@@ -85,6 +119,8 @@ Unique: `organization_id + user_id`
 - updated_at
 
 Unique: `organization_id + slug`
+
+`organization_id` stays denormalized (ADR-001). `client_id` is required.
 
 V1 does not store tone_of_voice / ai_enabled on brands (Phase 3–4).
 

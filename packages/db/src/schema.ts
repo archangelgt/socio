@@ -175,6 +175,24 @@ export const memberships = pgTable(
   ],
 );
 
+export const clients = pgTable(
+  "clients",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    status: text("status").notNull().default("active"),
+    ...timestamps,
+  },
+  (table) => [
+    unique("clients_org_slug").on(table.organizationId, table.slug),
+    index("clients_org_idx").on(table.organizationId),
+  ],
+);
+
 export const brands = pgTable(
   "brands",
   {
@@ -182,6 +200,9 @@ export const brands = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id),
     name: text("name").notNull(),
     slug: text("slug").notNull(),
     description: text("description"),
@@ -192,6 +213,7 @@ export const brands = pgTable(
   (table) => [
     unique("brands_org_slug").on(table.organizationId, table.slug),
     index("brands_org_idx").on(table.organizationId),
+    index("brands_client_idx").on(table.clientId),
   ],
 );
 
@@ -225,6 +247,43 @@ export const socialAccounts = pgTable(
       .on(table.provider, table.externalAccountId)
       .where(sql`${table.status} = 'active'`),
     index("social_accounts_org_idx").on(table.organizationId),
+  ],
+);
+
+/**
+ * Optional grants that restrict an org membership to specific client(s).
+ * Zero rows for a membership = org-wide access (OWNER/ADMIN always; other roles
+ * keep backward-compatible org-wide access until scoped).
+ */
+export const membershipScopes = pgTable(
+  "membership_scopes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    membershipId: uuid("membership_id")
+      .notNull()
+      .references(() => memberships.id),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id),
+    brandId: uuid("brand_id").references(() => brands.id),
+    socialAccountId: uuid("social_account_id").references(
+      () => socialAccounts.id,
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique("membership_scopes_membership_client").on(
+      table.membershipId,
+      table.clientId,
+    ),
+    index("membership_scopes_membership_idx").on(table.membershipId),
+    index("membership_scopes_org_idx").on(table.organizationId),
+    index("membership_scopes_client_idx").on(table.clientId),
   ],
 );
 
