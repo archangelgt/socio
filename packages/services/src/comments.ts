@@ -1,15 +1,37 @@
 import type { Database } from "@social-ai/db";
 import {
+  brands,
   comments,
   contacts,
   conversations,
   messages,
   posts,
 } from "@social-ai/db";
+import type { ClientAccess } from "@social-ai/domain";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { thumbnailFromMetadata } from "./posts";
+import { clientScopeIds } from "./scopes";
 
-export async function listComments(db: Database, organizationId: string) {
+export async function listComments(
+  db: Database,
+  organizationId: string,
+  access: ClientAccess,
+  clientId?: string,
+) {
+  const scope = clientScopeIds(access);
+  const filters = [eq(comments.organizationId, organizationId)];
+  if (clientId) {
+    if (scope !== null && !scope.includes(clientId)) {
+      return [];
+    }
+    filters.push(eq(brands.clientId, clientId));
+  } else if (scope !== null) {
+    if (scope.length === 0) {
+      return [];
+    }
+    filters.push(inArray(brands.clientId, scope));
+  }
+
   const rows = await db
     .select({
       id: comments.id,
@@ -27,8 +49,9 @@ export async function listComments(db: Database, organizationId: string) {
       externalPostId: comments.externalPostId,
     })
     .from(comments)
+    .innerJoin(brands, eq(brands.id, comments.brandId))
     .leftJoin(posts, eq(posts.id, comments.postId))
-    .where(eq(comments.organizationId, organizationId))
+    .where(and(...filters))
     .orderBy(desc(comments.createdAt))
     .limit(100);
 
@@ -62,7 +85,26 @@ export async function getPost(
   return post ?? null;
 }
 
-export async function listConversations(db: Database, organizationId: string) {
+export async function listConversations(
+  db: Database,
+  organizationId: string,
+  access: ClientAccess,
+  clientId?: string,
+) {
+  const scope = clientScopeIds(access);
+  const filters = [eq(conversations.organizationId, organizationId)];
+  if (clientId) {
+    if (scope !== null && !scope.includes(clientId)) {
+      return [];
+    }
+    filters.push(eq(brands.clientId, clientId));
+  } else if (scope !== null) {
+    if (scope.length === 0) {
+      return [];
+    }
+    filters.push(inArray(brands.clientId, scope));
+  }
+
   const rows = await db
     .select({
       id: conversations.id,
@@ -74,7 +116,8 @@ export async function listConversations(db: Database, organizationId: string) {
     })
     .from(conversations)
     .innerJoin(contacts, eq(contacts.id, conversations.contactId))
-    .where(eq(conversations.organizationId, organizationId))
+    .innerJoin(brands, eq(brands.id, conversations.brandId))
+    .where(and(...filters))
     .orderBy(desc(conversations.lastMessageAt))
     .limit(100);
 

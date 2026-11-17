@@ -493,6 +493,28 @@ nav button.active {
   margin: 0.15rem 0 0.75rem;
 }
 
+.client-picker {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 0.85rem;
+}
+
+.client-picker span {
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.client-picker select {
+  width: 100%;
+  border: 1px solid rgb(248 250 252 / 16%);
+  border-radius: 0.55rem;
+  background: rgb(15 23 42 / 55%);
+  color: var(--white);
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+}
+
 .account button,
 form button[type="submit"],
 .button-row > button,

@@ -7,21 +7,26 @@ import {
   AppError,
   type MetaConfig,
   type ServiceContext,
+  assertBrandInAccess,
   checkoutConfigFromEnv,
+  clientAccessFromMembership,
   completeMetaOAuth,
   connectMockChannel,
   createCheckoutSession,
+  createClient,
   createInlineRuntime,
   disconnectChannel,
   getAppError,
   getPost,
   getPostPreview,
+  grantMembershipClientScope,
   humanModerate,
   hydrateMissingPostMedia,
   ingestWebhook,
   isUniqueViolation,
   listBrands,
   listChannels,
+  listClients,
   listComments,
   listConversations,
   listModerationQueue,
@@ -266,9 +271,71 @@ export async function buildApp(options: AppOptions) {
     return typeof header === "string" ? header : undefined;
   }
 
+  function clientIdQuery(request: FastifyRequest): string | undefined {
+    const query = request.query as Record<string, unknown>;
+    const value = query.clientId;
+    return typeof value === "string" && value.length > 0 ? value : undefined;
+  }
+
   app.get("/api/v1/organizations", async (request) => {
     const { session } = await loadSession(request);
     return { organizations: session.memberships };
+  });
+
+  app.get("/api/v1/clients", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "VIEWER",
+    );
+    const access = clientAccessFromMembership(membership);
+    return {
+      clients: await listClients(ctx.db, membership.organizationId, access),
+    };
+  });
+
+  app.post("/api/v1/clients", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "ADMIN",
+    );
+    const body = z
+      .object({
+        name: z.string().min(1),
+        slug: z.string().min(1).optional(),
+      })
+      .parse(request.body);
+    const client = await createClient(ctx.db, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      role: membership.role,
+      name: body.name,
+      slug: body.slug,
+    });
+    return { client };
+  });
+
+  app.post("/api/v1/memberships/:membershipId/scopes", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "ADMIN",
+    );
+    const params = z
+      .object({ membershipId: z.string().uuid() })
+      .parse(request.params);
+    const body = z.object({ clientId: z.string().uuid() }).parse(request.body);
+    const scope = await grantMembershipClientScope(ctx.db, {
+      organizationId: membership.organizationId,
+      membershipId: params.membershipId,
+      clientId: body.clientId,
+      actorRole: membership.role,
+    });
+    return { scope };
   });
 
   app.get("/api/v1/brands", async (request) => {
@@ -278,7 +345,19 @@ export async function buildApp(options: AppOptions) {
       orgId(request),
       "VIEWER",
     );
-    return { brands: await listBrands(ctx.db, membership.organizationId) };
+    const access = clientAccessFromMembership(membership);
+    const selectedClientId = clientIdQuery(request);
+    if (selectedClientId) {
+      z.string().uuid().parse(selectedClientId);
+    }
+    return {
+      brands: await listBrands(
+        ctx.db,
+        membership.organizationId,
+        access,
+        selectedClientId,
+      ),
+    };
   });
 
   app.get("/api/v1/channels", async (request) => {
@@ -288,7 +367,19 @@ export async function buildApp(options: AppOptions) {
       orgId(request),
       "VIEWER",
     );
-    return { channels: await listChannels(ctx.db, membership.organizationId) };
+    const access = clientAccessFromMembership(membership);
+    const selectedClientId = clientIdQuery(request);
+    if (selectedClientId) {
+      z.string().uuid().parse(selectedClientId);
+    }
+    return {
+      channels: await listChannels(
+        ctx.db,
+        membership.organizationId,
+        access,
+        selectedClientId,
+      ),
+    };
   });
 
   app.post("/api/v1/channels/:provider/connect", async (request) => {
@@ -298,9 +389,15 @@ export async function buildApp(options: AppOptions) {
       orgId(request),
       "ADMIN",
     );
+    const access = clientAccessFromMembership(membership);
     const params = z.object({ provider: z.string() }).parse(request.params);
     if (isMetaProvider(params.provider)) {
       const body = z.object({ brandId: z.string().uuid() }).parse(request.body);
+      await assertBrandInAccess(ctx.db, {
+        organizationId: membership.organizationId,
+        brandId: body.brandId,
+        access,
+      });
       return startMetaOAuth(ctx.meta, {
         organizationId: membership.organizationId,
         brandId: body.brandId,
@@ -319,6 +416,7 @@ export async function buildApp(options: AppOptions) {
       organizationId: membership.organizationId,
       actorId: session.user.id,
       tokenKey: ctx.tokenKey,
+      access,
       ...body,
     });
     return { channel };
@@ -331,12 +429,14 @@ export async function buildApp(options: AppOptions) {
       orgId(request),
       "ADMIN",
     );
+    const access = clientAccessFromMembership(membership);
     const params = z.object({ id: z.string().uuid() }).parse(request.params);
     const channel = await disconnectChannel(ctx.db, {
       organizationId: membership.organizationId,
       actorId: session.user.id,
       channelId: params.id,
       tokenKey: ctx.tokenKey,
+      access,
     });
     return { channel };
   });
@@ -388,8 +488,20 @@ export async function buildApp(options: AppOptions) {
       orgId(request),
       "AGENT",
     );
+    const access = clientAccessFromMembership(membership);
+    const selectedClientId = clientIdQuery(request);
+    if (selectedClientId) {
+      z.string().uuid().parse(selectedClientId);
+    }
     await hydrateMissingPostMedia(ctx, membership.organizationId);
-    return { comments: await listComments(ctx.db, membership.organizationId) };
+    return {
+      comments: await listComments(
+        ctx.db,
+        membership.organizationId,
+        access,
+        selectedClientId,
+      ),
+    };
   });
 
   app.post("/api/v1/comments/sync", async (request) => {
@@ -399,7 +511,8 @@ export async function buildApp(options: AppOptions) {
       orgId(request),
       "MODERATOR",
     );
-    return syncInstagramComments(ctx, membership.organizationId);
+    const access = clientAccessFromMembership(membership);
+    return syncInstagramComments(ctx, membership.organizationId, access);
   });
 
   app.get("/api/v1/conversations", async (request) => {
@@ -409,8 +522,18 @@ export async function buildApp(options: AppOptions) {
       orgId(request),
       "AGENT",
     );
+    const access = clientAccessFromMembership(membership);
+    const selectedClientId = clientIdQuery(request);
+    if (selectedClientId) {
+      z.string().uuid().parse(selectedClientId);
+    }
     return {
-      conversations: await listConversations(ctx.db, membership.organizationId),
+      conversations: await listConversations(
+        ctx.db,
+        membership.organizationId,
+        access,
+        selectedClientId,
+      ),
     };
   });
 
@@ -455,15 +578,21 @@ export async function buildApp(options: AppOptions) {
       orgId(request),
       "MODERATOR",
     );
+    const access = clientAccessFromMembership(membership);
     const query = z
-      .object({ status: z.string().optional() })
+      .object({
+        status: z.string().optional(),
+        clientId: z.string().uuid().optional(),
+      })
       .parse(request.query);
     await hydrateMissingPostMedia(ctx, membership.organizationId);
     return {
       items: await listModerationQueue(
         ctx.db,
         membership.organizationId,
+        access,
         query.status,
+        query.clientId,
       ),
     };
   });
@@ -475,12 +604,14 @@ export async function buildApp(options: AppOptions) {
       orgId(request),
       "MODERATOR",
     );
+    const access = clientAccessFromMembership(membership);
     const params = z.object({ id: z.string().uuid() }).parse(request.params);
     await humanModerate(ctx, {
       organizationId: membership.organizationId,
       actorId: session.user.id,
       decisionId: params.id,
       action: "allow",
+      access,
     });
     return { ok: true };
   });
@@ -492,12 +623,14 @@ export async function buildApp(options: AppOptions) {
       orgId(request),
       "MODERATOR",
     );
+    const access = clientAccessFromMembership(membership);
     const params = z.object({ id: z.string().uuid() }).parse(request.params);
     await humanModerate(ctx, {
       organizationId: membership.organizationId,
       actorId: session.user.id,
       decisionId: params.id,
       action: "hide",
+      access,
     });
     return { ok: true };
   });
@@ -509,12 +642,14 @@ export async function buildApp(options: AppOptions) {
       orgId(request),
       "MODERATOR",
     );
+    const access = clientAccessFromMembership(membership);
     const params = z.object({ id: z.string().uuid() }).parse(request.params);
     await humanModerate(ctx, {
       organizationId: membership.organizationId,
       actorId: session.user.id,
       decisionId: params.id,
       action: "restore",
+      access,
     });
     return { ok: true };
   });

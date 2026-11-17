@@ -1,6 +1,7 @@
 import {
   type Database,
   brands,
+  clients,
   memberships,
   moderationPolicies,
   moderationRules,
@@ -8,8 +9,12 @@ import {
   sessions,
   users,
 } from "@social-ai/db";
-import type { MembershipRole } from "@social-ai/domain";
-import { roleAtLeast } from "@social-ai/domain";
+import {
+  type ClientAccess,
+  type MembershipRole,
+  allowedClientIds,
+  roleAtLeast,
+} from "@social-ai/domain";
 import { defaultModerationRules } from "@social-ai/moderation";
 import { eq } from "drizzle-orm";
 import { writeAudit } from "./audit";
@@ -21,6 +26,7 @@ import {
   verifyPassword,
 } from "./crypto";
 import { AppError } from "./errors";
+import { loadClientAccessMap } from "./scopes";
 import { uniqueSlug } from "./slug";
 
 export type PublicUser = {
@@ -30,9 +36,12 @@ export type PublicUser = {
 };
 
 export type MembershipView = {
+  membershipId: string;
   organizationId: string;
   organizationName: string;
   role: MembershipRole;
+  /** null = org-wide (all clients); otherwise allowed client ids */
+  clientIds: string[] | null;
 };
 
 async function seedBrandPolicy(
@@ -135,16 +144,37 @@ export async function registerUser(
     );
   }
 
-  await db.insert(memberships).values({
-    organizationId: organization.id,
-    userId: user.id,
-    role: "OWNER",
-  });
+  const [membership] = await db
+    .insert(memberships)
+    .values({
+      organizationId: organization.id,
+      userId: user.id,
+      role: "OWNER",
+    })
+    .returning();
+
+  if (!membership) {
+    throw new AppError(500, "REGISTER_FAILED", "Could not create membership.");
+  }
+
+  const [client] = await db
+    .insert(clients)
+    .values({
+      organizationId: organization.id,
+      name: "Default",
+      slug: "default",
+    })
+    .returning();
+
+  if (!client) {
+    throw new AppError(500, "REGISTER_FAILED", "Could not create client.");
+  }
 
   const [brand] = await db
     .insert(brands)
     .values({
       organizationId: organization.id,
+      clientId: client.id,
       name: input.organizationName.trim(),
       slug: "default",
     })
@@ -176,9 +206,11 @@ export async function registerUser(
     sessionToken,
     memberships: [
       {
+        membershipId: membership.id,
         organizationId: organization.id,
         organizationName: organization.name,
         role: "OWNER",
+        clientIds: null,
       },
     ],
   };
@@ -239,6 +271,7 @@ export async function listMemberships(
 ): Promise<MembershipView[]> {
   const rows = await db
     .select({
+      membershipId: memberships.id,
       organizationId: memberships.organizationId,
       organizationName: organizations.name,
       role: memberships.role,
@@ -247,7 +280,27 @@ export async function listMemberships(
     .innerJoin(organizations, eq(organizations.id, memberships.organizationId))
     .where(eq(memberships.userId, userId));
 
-  return rows;
+  const roleByMembershipId = new Map(
+    rows.map((row) => [row.membershipId, row.role as MembershipRole]),
+  );
+  const accessMap = await loadClientAccessMap(
+    db,
+    rows.map((row) => row.membershipId),
+    roleByMembershipId,
+  );
+
+  return rows.map((row) => {
+    const access =
+      accessMap.get(row.membershipId) ??
+      ({ mode: "all" } satisfies ClientAccess);
+    return {
+      membershipId: row.membershipId,
+      organizationId: row.organizationId,
+      organizationName: row.organizationName,
+      role: row.role as MembershipRole,
+      clientIds: allowedClientIds(access),
+    };
+  });
 }
 
 export async function resolveSession(
@@ -287,15 +340,15 @@ export async function resolveSession(
 }
 
 export function requireMembership(
-  memberships: MembershipView[],
+  membershipsList: MembershipView[],
   organizationId: string | undefined,
   minRole: MembershipRole,
 ): MembershipView {
   const selected =
     organizationId !== undefined
-      ? memberships.find((item) => item.organizationId === organizationId)
-      : memberships.length === 1
-        ? memberships[0]
+      ? membershipsList.find((item) => item.organizationId === organizationId)
+      : membershipsList.length === 1
+        ? membershipsList[0]
         : undefined;
 
   if (!selected) {
@@ -315,4 +368,13 @@ export function requireMembership(
   }
 
   return selected;
+}
+
+export function clientAccessFromMembership(
+  membership: MembershipView,
+): ClientAccess {
+  if (membership.clientIds === null) {
+    return { mode: "all" };
+  }
+  return { mode: "restricted", clientIds: membership.clientIds };
 }

@@ -23,6 +23,7 @@ export {
 } from "./queue";
 export type { ServiceContext, MetaConfig } from "./context";
 export {
+  clientAccessFromMembership,
   listMemberships,
   loginUser,
   logoutSession,
@@ -33,11 +34,25 @@ export {
   type PublicUser,
 } from "./auth";
 export {
+  createClient,
+  grantMembershipClientScope,
+  listBrandsForAccess,
+  listClients,
+} from "./clients";
+export {
   connectMockChannel,
   disconnectChannel,
   listBrands,
   listChannels,
 } from "./channels";
+export {
+  assertBrandInAccess,
+  assertChannelInAccess,
+  assertClientAllowed,
+  assertClientInOrg,
+  loadClientAccess,
+  type ClientAccess,
+} from "./scopes";
 export { completeMetaOAuth, startMetaOAuth } from "./meta";
 export { ingestWebhook, processInboundEvent } from "./inbound";
 export { syncInstagramComments } from "./sync";

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Mascot } from "./Mascot";
-import { type Session, api } from "./api";
+import { type ClientRow, type Session, api } from "./api";
 import { MarketingSite } from "./marketing/MarketingSite";
 import { t } from "./marketing/copy";
 import { detectLocale, href, navigate, parseRoute } from "./marketing/route";
@@ -330,6 +330,8 @@ export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [page, setPage] = useState<Page>("moderation");
   const [error, setError] = useState<string | null>(null);
+  const [clients, setClients] = useState<ClientRow[]>([]);
+  const [clientId, setClientId] = useState<string>("");
   const [path, setPath] = useState(
     () => window.location.pathname + window.location.search,
   );
@@ -352,6 +354,26 @@ export function App() {
       .then(setSession)
       .catch(() => setSession(null));
   }, []);
+
+  useEffect(() => {
+    if (!organizationId) {
+      setClients([]);
+      setClientId("");
+      return;
+    }
+    void api
+      .clients(organizationId)
+      .then((data) => {
+        setClients(data.clients);
+        setClientId((current) => {
+          if (current && data.clients.some((item) => item.id === current)) {
+            return current;
+          }
+          return data.clients[0]?.id ?? "";
+        });
+      })
+      .catch((err: Error) => setError(err.message));
+  }, [organizationId]);
 
   useEffect(() => {
     if (route.kind === "redirect") {
@@ -480,6 +502,21 @@ export function App() {
         <div className="account">
           <p>{session.user.name}</p>
           <p className="muted">{session.memberships[0]?.organizationName}</p>
+          {clients.length > 0 ? (
+            <label className="client-picker">
+              <span className="muted">Client</span>
+              <select
+                value={clientId}
+                onChange={(event) => setClientId(event.target.value)}
+              >
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <button
             type="button"
             onClick={() => {
@@ -499,14 +536,26 @@ export function App() {
       </aside>
       <section className="content">
         {error ? <p className="error">{error}</p> : null}
-        {page === "moderation" && organizationId ? (
-          <ModerationPage organizationId={organizationId} setError={setError} />
+        {page === "moderation" && organizationId && clientId ? (
+          <ModerationPage
+            organizationId={organizationId}
+            clientId={clientId}
+            setError={setError}
+          />
         ) : null}
-        {page === "inbox" && organizationId ? (
-          <InboxPage organizationId={organizationId} setError={setError} />
+        {page === "inbox" && organizationId && clientId ? (
+          <InboxPage
+            organizationId={organizationId}
+            clientId={clientId}
+            setError={setError}
+          />
         ) : null}
-        {page === "channels" && organizationId ? (
-          <ChannelsPage organizationId={organizationId} setError={setError} />
+        {page === "channels" && organizationId && clientId ? (
+          <ChannelsPage
+            organizationId={organizationId}
+            clientId={clientId}
+            setError={setError}
+          />
         ) : null}
       </section>
     </div>
@@ -653,9 +702,11 @@ function AuthScreen({
 
 function ModerationPage({
   organizationId,
+  clientId,
   setError,
 }: {
   organizationId: string;
+  clientId: string;
   setError: (value: string | null) => void;
 }) {
   const [items, setItems] = useState<
@@ -665,10 +716,10 @@ function ModerationPage({
 
   const reload = useCallback(() => {
     void api
-      .queue(organizationId)
+      .queue(organizationId, undefined, clientId)
       .then((data) => setItems(data.items))
       .catch((err: Error) => setError(err.message));
-  }, [organizationId, setError]);
+  }, [organizationId, clientId, setError]);
 
   useEffect(() => {
     reload();
@@ -785,9 +836,11 @@ function ModerationPage({
 
 function InboxPage({
   organizationId,
+  clientId,
   setError,
 }: {
   organizationId: string;
+  clientId: string;
   setError: (value: string | null) => void;
 }) {
   const [comments, setComments] = useState<
@@ -799,15 +852,15 @@ function InboxPage({
 
   useEffect(() => {
     void Promise.all([
-      api.comments(organizationId),
-      api.conversations(organizationId),
+      api.comments(organizationId, clientId),
+      api.conversations(organizationId, clientId),
     ])
       .then(([commentData, conversationData]) => {
         setComments(commentData.comments);
         setConversations(conversationData.conversations);
       })
       .catch((err: Error) => setError(err.message));
-  }, [organizationId, setError]);
+  }, [organizationId, clientId, setError]);
 
   return (
     <>
@@ -882,9 +935,11 @@ function InboxPage({
 
 function ChannelsPage({
   organizationId,
+  clientId,
   setError,
 }: {
   organizationId: string;
+  clientId: string;
   setError: (value: string | null) => void;
 }) {
   const [channels, setChannels] = useState<
@@ -895,16 +950,17 @@ function ChannelsPage({
   const [metaConfigured, setMetaConfigured] = useState(false);
 
   const reload = useCallback(() => {
-    void Promise.all([api.channels(organizationId), api.brands(organizationId)])
+    void Promise.all([
+      api.channels(organizationId, clientId),
+      api.brands(organizationId, clientId),
+    ])
       .then(([channelData, brandData]) => {
         setChannels(channelData.channels);
         const first = brandData.brands[0];
-        if (first) {
-          setBrandId(first.id);
-        }
+        setBrandId(first?.id ?? "");
       })
       .catch((err: Error) => setError(err.message));
-  }, [organizationId, setError]);
+  }, [organizationId, clientId, setError]);
 
   useEffect(() => {
     reload();

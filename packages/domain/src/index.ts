@@ -4,6 +4,15 @@ export {
   type MembershipRole,
 } from "./rbac";
 export {
+  allowedClientIds,
+  canManageClients,
+  filterByClientAccess,
+  isClientAllowed,
+  isOrgWideAccess,
+  resolveClientAccess,
+  type ClientAccess,
+} from "./scopes";
+export {
   ACTION_SOURCES,
   QUEUE_INBOUND_EVENTS,
   QUEUE_MODERATION,

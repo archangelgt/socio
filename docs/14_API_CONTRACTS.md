@@ -39,6 +39,18 @@ POST   /api/v1/organizations/:id/invitations
 DELETE /api/v1/organizations/:id/members/:userId
 ```
 
+## Clients
+
+```text
+GET   /api/v1/clients
+POST  /api/v1/clients
+POST  /api/v1/memberships/:membershipId/scopes
+```
+
+List/create clients for the active organization. Responses respect `membership_scopes`
+(OWNER/ADMIN with no scopes see all clients). Optional query `clientId` on brand/channel/inbox
+list routes further narrows results; server still enforces scopes.
+
 ## Brands
 
 ```text
