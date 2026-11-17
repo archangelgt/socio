@@ -29,18 +29,30 @@ jobs:
           fi
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
+          KEY_FILE="$HOME/.ssh/id_ed25519"
+          # Prefer real multiline secret; fall back if pasted with literal \n
+          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          if ! ssh-keygen -y -f "$KEY_FILE" >/dev/null 2>&1; then
+            printf '%b\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > "$KEY_FILE"
+            chmod 600 "$KEY_FILE"
+          fi
+          if ! ssh-keygen -y -f "$KEY_FILE" >/dev/null 2>&1; then
+            echo "DEPLOY_SSH_KEY is not a valid OpenSSH private key." >&2
+            echo "Re-paste the full key (BEGIN…END) as a multiline Actions secret." >&2
+            exit 1
+          fi
+          {
+            echo "Host 146.190.132.169"
+            echo "  User root"
+            echo "  IdentityFile $KEY_FILE"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+          } > ~/.ssh/config
+          chmod 600 ~/.ssh/config
           ssh-keyscan -H 146.190.132.169 >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
-          cat >> ~/.ssh/config <<'EOF'
-          Host 146.190.132.169
-            User root
-            IdentityFile ~/.ssh/id_ed25519
-            IdentitiesOnly yes
-            StrictHostKeyChecking yes
-          EOF
-          chmod 600 ~/.ssh/config
+          ssh -o BatchMode=yes root@146.190.132.169 'echo ssh_ok'
 
       - name: Deploy to socio.seraphsystems.com
         env:
