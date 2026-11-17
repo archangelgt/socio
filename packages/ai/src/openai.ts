@@ -1,11 +1,10 @@
-import {
-  MODERATION_ACTIONS,
-  MODERATION_CATEGORIES,
-  type ModerationResult,
-  SEVERITIES,
-  TAXONOMY_VERSION,
-} from "@social-ai/domain";
+import { type ModerationResult, TAXONOMY_VERSION } from "@social-ai/domain";
 import { AIProviderError } from "./errors";
+import {
+  MODERATION_RESULT_SCHEMA,
+  MODERATION_SYSTEM_PROMPT,
+  moderationUserContent,
+} from "./moderation-prompt";
 import type {
   AIProvider,
   AIRequest,
@@ -19,62 +18,6 @@ import type {
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-4o-mini";
-
-const SYSTEM_PROMPT = `You moderate public social-media comments for a brand community.
-
-Classify Spanish, English, and Portuguese by meaning, not keywords.
-Return only the structured moderation result. No chain-of-thought.
-
-Do not treat legitimate criticism as a violation. These should be ALLOW
-with complaint, feedback, or safe:
-- "This product is terrible."
-- "I hate this company."
-- "Your service is awful."
-- "Un modelo para armar pero nunca para desarmar."
-
-Hide-worthy: hate speech, harassment or bullying of people, threats,
-discrimination, severe profanity aimed at people, sexual/violent/graphic
-content, spam, scam, phishing, impersonation, bot-like or repetitive promo.
-
-self_harm_related and threat: set needs_human_review true.
-
-taxonomy_version must be "${TAXONOMY_VERSION}".
-severity: ${SEVERITIES.join(", ")}.
-recommended_action: ${MODERATION_ACTIONS.join(", ")}.
-category name: ${MODERATION_CATEGORIES.join(", ")}.
-confidence values are numbers from 0 to 1.`;
-
-const RESULT_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: [
-    "taxonomy_version",
-    "categories",
-    "severity",
-    "overall_confidence",
-    "recommended_action",
-    "needs_human_review",
-  ],
-  properties: {
-    taxonomy_version: { type: "string" },
-    categories: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["name", "confidence"],
-        properties: {
-          name: { type: "string", enum: [...MODERATION_CATEGORIES] },
-          confidence: { type: "number" },
-        },
-      },
-    },
-    severity: { type: "string", enum: [...SEVERITIES] },
-    overall_confidence: { type: "number" },
-    recommended_action: { type: "string", enum: [...MODERATION_ACTIONS] },
-    needs_human_review: { type: "boolean" },
-  },
-} as const;
 
 export type OpenAICompatibleConfig = {
   apiKey: string;
@@ -121,12 +64,6 @@ export class OpenAICompatibleProvider implements AIProvider {
   }
 
   async moderate(input: ModerationRequest): Promise<ModerationResult> {
-    const userParts = [
-      input.brandName ? `Brand: ${input.brandName}` : null,
-      input.postText ? `Post: ${input.postText}` : null,
-      `Comment: ${input.text}`,
-    ].filter((part): part is string => Boolean(part));
-
     const response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -141,12 +78,12 @@ export class OpenAICompatibleProvider implements AIProvider {
           json_schema: {
             name: "moderation_result",
             strict: true,
-            schema: RESULT_SCHEMA,
+            schema: MODERATION_RESULT_SCHEMA,
           },
         },
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userParts.join("\n") },
+          { role: "system", content: MODERATION_SYSTEM_PROMPT },
+          { role: "user", content: moderationUserContent(input) },
         ],
       }),
       signal: AbortSignal.timeout(20_000),
