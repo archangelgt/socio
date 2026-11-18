@@ -1,13 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
 import { CalendarPage } from "./CalendarPage";
 import { InvitePage, ShareMonthPage } from "./GuestPages";
+import {
+  IncidentsPage,
+  KnowledgePage,
+  SimulatePage,
+} from "./KnowledgeIncidentsPage";
 import { Mascot } from "./Mascot";
 import { type ClientRow, type Session, api } from "./api";
 import { MarketingSite } from "./marketing/MarketingSite";
 import { t } from "./marketing/copy";
 import { detectLocale, href, navigate, parseRoute } from "./marketing/route";
 
-type Page = "inbox" | "moderation" | "channels" | "team" | "calendar";
+type Page =
+  | "inbox"
+  | "moderation"
+  | "channels"
+  | "team"
+  | "calendar"
+  | "knowledge"
+  | "incidents"
+  | "simulate";
 
 const ORG_STORAGE_KEY = "socio.activeOrganizationId";
 const MEMBER_ROLES = [
@@ -268,6 +281,66 @@ function CalendarIcon() {
       />
       <path
         d="M8 3.5v3M16 3.5v3M4 9.5h16"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function BookIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <title>Knowledge</title>
+      <path
+        d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v15.5H7.5A2.5 2.5 0 0 0 5 21V5.5Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M5 18.5h12"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <title>Incidents</title>
+      <path
+        d="M12 4.5 20 19H4L12 4.5Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 10v4.5M12 16.8v.2"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function FlaskIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <title>Simulate</title>
+      <path
+        d="M9 3h6M10 3v6.2L5.5 18.5A2.2 2.2 0 0 0 7.4 22h9.2a2.2 2.2 0 0 0 1.9-3.5L14 9.2V3"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8.2 15h7.6"
         stroke="currentColor"
         strokeWidth="1.7"
         strokeLinecap="round"
@@ -626,6 +699,30 @@ export function App() {
             <CalendarIcon />
             Calendar
           </button>
+          <button
+            type="button"
+            className={page === "knowledge" ? "active" : ""}
+            onClick={() => setPage("knowledge")}
+          >
+            <BookIcon />
+            Knowledge
+          </button>
+          <button
+            type="button"
+            className={page === "incidents" ? "active" : ""}
+            onClick={() => setPage("incidents")}
+          >
+            <AlertIcon />
+            Incidents
+          </button>
+          <button
+            type="button"
+            className={page === "simulate" ? "active" : ""}
+            onClick={() => setPage("simulate")}
+          >
+            <FlaskIcon />
+            Simulate
+          </button>
           {canManageAccess(activeMembership?.role) ? (
             <button
               type="button"
@@ -720,6 +817,36 @@ export function App() {
         ) : null}
         {page === "calendar" && organizationId && clientId ? (
           <CalendarPage
+            organizationId={organizationId}
+            clientId={clientId}
+            setError={setError}
+          />
+        ) : null}
+        {page === "knowledge" && organizationId && clientId ? (
+          <KnowledgePage
+            organizationId={organizationId}
+            clientId={clientId}
+            setError={setError}
+          />
+        ) : null}
+        {page === "incidents" && organizationId && clientId ? (
+          <IncidentsPage
+            organizationId={organizationId}
+            clientId={clientId}
+            crisisMode={Boolean(
+              clients.find((item) => item.id === clientId)?.crisisMode,
+            )}
+            setError={setError}
+            onCrisisChanged={() => {
+              void api
+                .clients(organizationId)
+                .then((data) => setClients(data.clients))
+                .catch((err: Error) => setError(err.message));
+            }}
+          />
+        ) : null}
+        {page === "simulate" && organizationId && clientId ? (
+          <SimulatePage
             organizationId={organizationId}
             clientId={clientId}
             setError={setError}

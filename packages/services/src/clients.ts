@@ -35,10 +35,58 @@ export async function listClients(
       name: clients.name,
       slug: clients.slug,
       status: clients.status,
+      crisisMode: clients.crisisMode,
     })
     .from(clients)
     .where(and(...filters))
     .orderBy(clients.name);
+}
+
+export async function setClientCrisisMode(
+  db: Database,
+  input: {
+    organizationId: string;
+    actorId: string;
+    role: MembershipRole;
+    access: ClientAccess;
+    clientId: string;
+    crisisMode: boolean;
+  },
+) {
+  if (!canManageClients(input.role)) {
+    throw new AppError(
+      403,
+      "FORBIDDEN",
+      "Only OWNER or ADMIN can toggle crisis mode.",
+    );
+  }
+  assertClientAllowed(input.access, input.clientId);
+  const [updated] = await db
+    .update(clients)
+    .set({ crisisMode: input.crisisMode, updatedAt: new Date() })
+    .where(
+      and(
+        eq(clients.id, input.clientId),
+        eq(clients.organizationId, input.organizationId),
+      ),
+    )
+    .returning({
+      id: clients.id,
+      name: clients.name,
+      crisisMode: clients.crisisMode,
+    });
+  if (!updated) {
+    throw new AppError(404, "CLIENT_NOT_FOUND", "Client not found.");
+  }
+  await writeAudit(db, {
+    organizationId: input.organizationId,
+    actorType: "user",
+    actorId: input.actorId,
+    eventType: input.crisisMode ? "client.crisis_on" : "client.crisis_off",
+    entityType: "client",
+    entityId: input.clientId,
+  });
+  return updated;
 }
 
 export async function createClient(

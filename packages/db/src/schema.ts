@@ -209,6 +209,8 @@ export const clients = pgTable(
     name: text("name").notNull(),
     slug: text("slug").notNull(),
     status: text("status").notNull().default("active"),
+    /** When true, auto-hide is paused; AI still classifies but queues for humans. */
+    crisisMode: boolean("crisis_mode").notNull().default(false),
     ...timestamps,
   },
   (table) => [
@@ -844,4 +846,113 @@ export const contentPieceDestinations = pgTable(
       table.contentPieceId,
     ),
   ],
+);
+
+export const knowledgeKindEnum = pgEnum("knowledge_kind", [
+  "faq",
+  "tone",
+  "protocol",
+  "policy",
+  "url",
+  "note",
+]);
+
+export const knowledgeStatusEnum = pgEnum("knowledge_status", [
+  "draft",
+  "active",
+  "archived",
+]);
+
+export const knowledgeDocuments = pgTable(
+  "knowledge_documents",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id),
+    brandId: uuid("brand_id").references(() => brands.id),
+    title: text("title").notNull(),
+    kind: knowledgeKindEnum("kind").notNull().default("note"),
+    body: text("body").notNull().default(""),
+    sourceUrl: text("source_url"),
+    status: knowledgeStatusEnum("status").notNull().default("active"),
+    authoritative: boolean("authoritative").notNull().default(false),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id),
+    ...timestamps,
+  },
+  (table) => [
+    index("knowledge_documents_org_client_idx").on(
+      table.organizationId,
+      table.clientId,
+      table.status,
+    ),
+  ],
+);
+
+export const incidentStatusEnum = pgEnum("incident_status", [
+  "open",
+  "monitoring",
+  "resolved",
+  "closed",
+]);
+
+export const incidents = pgTable(
+  "incidents",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id),
+    brandId: uuid("brand_id").references(() => brands.id),
+    title: text("title").notNull(),
+    summary: text("summary").notNull().default(""),
+    status: incidentStatusEnum("status").notNull().default("open"),
+    severity: severityEnum("severity").notNull().default("MEDIUM"),
+    assignedUserId: uuid("assigned_user_id").references(() => users.id),
+    evidenceObserved: boolean("evidence_observed").notNull().default(false),
+    coordinationSuspected: boolean("coordination_suspected")
+      .notNull()
+      .default(false),
+    crisisEnabled: boolean("crisis_enabled").notNull().default(false),
+    openedByUserId: uuid("opened_by_user_id").references(() => users.id),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index("incidents_org_client_status_idx").on(
+      table.organizationId,
+      table.clientId,
+      table.status,
+    ),
+  ],
+);
+
+export const incidentEvidence = pgTable(
+  "incident_evidence",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    incidentId: uuid("incident_id")
+      .notNull()
+      .references(() => incidents.id),
+    kind: text("kind").notNull().default("note"),
+    label: text("label").notNull(),
+    body: text("body").notNull().default(""),
+    url: text("url"),
+    sensitive: boolean("sensitive").notNull().default(false),
+    commentId: uuid("comment_id").references(() => comments.id),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index("incident_evidence_incident_idx").on(table.incidentId)],
 );

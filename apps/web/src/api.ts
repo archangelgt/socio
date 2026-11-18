@@ -12,6 +12,7 @@ export type ClientRow = {
   name: string;
   slug: string;
   status: string;
+  crisisMode?: boolean;
 };
 
 export type Session = {
@@ -450,6 +451,131 @@ export const api = {
     request("/api/v1/webhooks/mock", {
       method: "POST",
       body: payload,
+    }),
+  knowledge: (organizationId: string, clientId: string) =>
+    request<{
+      documents: {
+        id: string;
+        title: string;
+        kind: string;
+        body: string;
+        sourceUrl: string | null;
+        status: string;
+        authoritative: boolean;
+        updatedAt: string;
+      }[];
+    }>(`/api/v1/knowledge?clientId=${encodeURIComponent(clientId)}`, {
+      organizationId,
+    }),
+  createKnowledge: (
+    organizationId: string,
+    body: {
+      clientId: string;
+      title: string;
+      kind: string;
+      body?: string;
+      sourceUrl?: string;
+      authoritative?: boolean;
+    },
+  ) =>
+    request<{ document: { id: string } }>("/api/v1/knowledge", {
+      method: "POST",
+      organizationId,
+      body,
+    }),
+  updateKnowledge: (
+    organizationId: string,
+    id: string,
+    body: {
+      title?: string;
+      body?: string;
+      status?: string;
+      authoritative?: boolean;
+    },
+  ) =>
+    request<{ document: { id: string } }>(`/api/v1/knowledge/${id}`, {
+      method: "PATCH",
+      organizationId,
+      body,
+    }),
+  incidents: (organizationId: string, clientId: string) =>
+    request<{
+      incidents: {
+        id: string;
+        title: string;
+        summary: string;
+        status: string;
+        severity: string;
+        crisisEnabled: boolean;
+        evidenceObserved: boolean;
+        createdAt: string;
+      }[];
+    }>(`/api/v1/incidents?clientId=${encodeURIComponent(clientId)}`, {
+      organizationId,
+    }),
+  createIncident: (
+    organizationId: string,
+    body: {
+      clientId: string;
+      title: string;
+      summary?: string;
+      severity?: string;
+      evidenceObserved?: boolean;
+      coordinationSuspected?: boolean;
+      enableCrisis?: boolean;
+    },
+  ) =>
+    request<{ incident: { id: string } }>("/api/v1/incidents", {
+      method: "POST",
+      organizationId,
+      body,
+    }),
+  updateIncident: (organizationId: string, id: string, status: string) =>
+    request<{ incident: { id: string } }>(`/api/v1/incidents/${id}`, {
+      method: "PATCH",
+      organizationId,
+      body: { status },
+    }),
+  incidentDossier: (organizationId: string, id: string) =>
+    request<Record<string, unknown>>(`/api/v1/incidents/${id}/dossier`, {
+      organizationId,
+    }),
+  setCrisisMode: (
+    organizationId: string,
+    clientId: string,
+    crisisMode: boolean,
+  ) =>
+    request<{ client: ClientRow }>(`/api/v1/clients/${clientId}/crisis`, {
+      method: "PATCH",
+      organizationId,
+      body: { crisisMode },
+    }),
+  simulatePolicy: (
+    organizationId: string,
+    body: {
+      clientId: string;
+      samples: string[];
+      proposedThreshold?: number;
+      brandId?: string;
+    },
+  ) =>
+    request<{
+      brandName: string;
+      currentThreshold: number;
+      proposedThreshold: number;
+      changedCount: number;
+      results: {
+        text: string;
+        severity: string;
+        confidence: number;
+        current: { queueState: string; action: string };
+        proposed: { queueState: string; action: string };
+        changed: boolean;
+      }[];
+    }>("/api/v1/moderation/simulate", {
+      method: "POST",
+      organizationId,
+      body,
     }),
   checkoutConfig: () =>
     request<{ provider: string; configured: boolean }>(

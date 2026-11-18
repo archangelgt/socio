@@ -173,7 +173,7 @@ Reason: agencies need folders per client without reinterpreting Brand as the cli
 
 ## ADR-026 — AndyMorales piloto expands Frozen V1
 
-Decision: for the AndyMorales Studio pilot, Socio may ship calendar pieces, guest month share links, invitations, urgency (semáforo), and later Meta publish / KB / incidents beyond the Frozen V1 wedge. Moderation Meta path remains the reliability baseline; publisher and ads stay gated on Meta matrices.
+Decision: for the AndyMorales Studio pilot, Socio may ship calendar pieces, guest month share links, invitations, urgency (semáforo), Meta publish for approved pieces, client KB (documents light), incidents + crisis mode, and policy simulation beyond the Frozen V1 wedge. Moderation Meta path remains the reliability baseline; ads (RF-14) stay gated on Meta marketing API research / matrices.
 
 Reason: product direction is AndyMorales on Socio (not a fork); the requirements MD is the pilot acceptance source.
 

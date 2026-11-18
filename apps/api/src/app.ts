@@ -8,6 +8,7 @@ import {
   type MetaConfig,
   type ServiceContext,
   acceptInvitation,
+  addIncidentEvidence,
   addOrganizationMember,
   addShareFeedback,
   assertBrandInAccess,
@@ -18,10 +19,13 @@ import {
   createCheckoutSession,
   createClient,
   createContentPiece,
+  createIncident,
   createInlineRuntime,
   createInvitation,
+  createKnowledgeDocument,
   createMonthShareLink,
   disconnectChannel,
+  exportIncidentDossier,
   getAppError,
   getPost,
   getPostPreview,
@@ -37,7 +41,9 @@ import {
   listComments,
   listContentPieces,
   listConversations,
+  listIncidents,
   listInvitations,
+  listKnowledgeDocuments,
   listModerationQueue,
   listOrganizationMembers,
   listPieceDestinations,
@@ -52,10 +58,14 @@ import {
   resolveSession,
   retryFailedDestination,
   schedulePiecePublish,
+  setClientCrisisMode,
   setMembershipClientScopes,
+  simulateModerationPolicy,
   startMetaOAuth,
   syncInstagramComments,
   updateContentPieceStatus,
+  updateIncidentStatus,
+  updateKnowledgeDocument,
   updateOrganizationMemberRole,
 } from "@social-ai/services";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
@@ -691,6 +701,259 @@ export async function buildApp(options: AppOptions) {
     const { ctx, session } = await loadSession(request);
     requireMembership(session.memberships, orgId(request), "MANAGER");
     return processDuePublishDestinations(ctx);
+  });
+
+  app.patch("/api/v1/clients/:id/crisis", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "ADMIN",
+    );
+    const access = clientAccessFromMembership(membership);
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z.object({ crisisMode: z.boolean() }).parse(request.body);
+    const client = await setClientCrisisMode(ctx.db, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      role: membership.role,
+      access,
+      clientId: params.id,
+      crisisMode: body.crisisMode,
+    });
+    return { client };
+  });
+
+  app.get("/api/v1/knowledge", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "VIEWER",
+    );
+    const access = clientAccessFromMembership(membership);
+    const query = z
+      .object({ clientId: z.string().uuid() })
+      .parse(request.query);
+    return {
+      documents: await listKnowledgeDocuments(ctx.db, {
+        organizationId: membership.organizationId,
+        access,
+        clientId: query.clientId,
+      }),
+    };
+  });
+
+  app.post("/api/v1/knowledge", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MANAGER",
+    );
+    const access = clientAccessFromMembership(membership);
+    const body = z
+      .object({
+        clientId: z.string().uuid(),
+        title: z.string().min(1),
+        kind: z.string().min(1),
+        body: z.string().optional(),
+        sourceUrl: z.string().url().optional(),
+        authoritative: z.boolean().optional(),
+      })
+      .parse(request.body);
+    const document = await createKnowledgeDocument(ctx.db, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      role: membership.role,
+      access,
+      clientId: body.clientId,
+      title: body.title,
+      kind: body.kind,
+      body: body.body,
+      sourceUrl: body.sourceUrl,
+      authoritative: body.authoritative,
+    });
+    return { document };
+  });
+
+  app.patch("/api/v1/knowledge/:id", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MANAGER",
+    );
+    const access = clientAccessFromMembership(membership);
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z
+      .object({
+        title: z.string().optional(),
+        body: z.string().optional(),
+        status: z.string().optional(),
+        authoritative: z.boolean().optional(),
+      })
+      .parse(request.body);
+    const document = await updateKnowledgeDocument(ctx.db, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      role: membership.role,
+      access,
+      documentId: params.id,
+      title: body.title,
+      body: body.body,
+      status: body.status,
+      authoritative: body.authoritative,
+    });
+    return { document };
+  });
+
+  app.get("/api/v1/incidents", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "VIEWER",
+    );
+    const access = clientAccessFromMembership(membership);
+    const query = z
+      .object({ clientId: z.string().uuid() })
+      .parse(request.query);
+    return {
+      incidents: await listIncidents(ctx.db, {
+        organizationId: membership.organizationId,
+        access,
+        clientId: query.clientId,
+      }),
+    };
+  });
+
+  app.post("/api/v1/incidents", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    const access = clientAccessFromMembership(membership);
+    const body = z
+      .object({
+        clientId: z.string().uuid(),
+        title: z.string().min(1),
+        summary: z.string().optional(),
+        severity: z.string().optional(),
+        evidenceObserved: z.boolean().optional(),
+        coordinationSuspected: z.boolean().optional(),
+        enableCrisis: z.boolean().optional(),
+      })
+      .parse(request.body);
+    const incident = await createIncident(ctx.db, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      role: membership.role,
+      access,
+      ...body,
+    });
+    return { incident };
+  });
+
+  app.patch("/api/v1/incidents/:id", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    const access = clientAccessFromMembership(membership);
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z.object({ status: z.string().min(1) }).parse(request.body);
+    const incident = await updateIncidentStatus(ctx.db, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      role: membership.role,
+      access,
+      incidentId: params.id,
+      status: body.status,
+    });
+    return { incident };
+  });
+
+  app.post("/api/v1/incidents/:id/evidence", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    const access = clientAccessFromMembership(membership);
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z
+      .object({
+        label: z.string().min(1),
+        body: z.string().optional(),
+        url: z.string().url().optional(),
+        sensitive: z.boolean().optional(),
+      })
+      .parse(request.body);
+    const evidence = await addIncidentEvidence(ctx.db, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      role: membership.role,
+      access,
+      incidentId: params.id,
+      label: body.label,
+      body: body.body,
+      url: body.url,
+      sensitive: body.sensitive,
+    });
+    return { evidence };
+  });
+
+  app.get("/api/v1/incidents/:id/dossier", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "VIEWER",
+    );
+    const access = clientAccessFromMembership(membership);
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const query = z
+      .object({ includeSensitive: z.enum(["true", "false"]).optional() })
+      .parse(request.query);
+    return exportIncidentDossier(ctx.db, {
+      organizationId: membership.organizationId,
+      access,
+      incidentId: params.id,
+      includeSensitive: query.includeSensitive === "true",
+    });
+  });
+
+  app.post("/api/v1/moderation/simulate", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MANAGER",
+    );
+    const access = clientAccessFromMembership(membership);
+    const body = z
+      .object({
+        clientId: z.string().uuid(),
+        brandId: z.string().uuid().optional(),
+        samples: z.array(z.string().min(1)).min(1).max(20),
+        proposedThreshold: z.number().min(0).max(1).optional(),
+      })
+      .parse(request.body);
+    return simulateModerationPolicy(ctx, {
+      organizationId: membership.organizationId,
+      role: membership.role,
+      access,
+      clientId: body.clientId,
+      brandId: body.brandId,
+      samples: body.samples,
+      proposedThreshold: body.proposedThreshold,
+    });
   });
 
   app.post("/api/v1/calendar/share-links", async (request) => {

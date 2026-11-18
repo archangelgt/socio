@@ -149,12 +149,31 @@ POST /api/v1/webhooks/:provider/:accountId
 
 Prefer identifying the account from the payload after signature check. `:accountId` is allowed when the provider cannot route otherwise.
 
+## Piloto (ADR-026) — knowledge, incidents, simulation
+
+Client-scoped Brand Brain light, crisis workflow, and dry-run policy compare:
+
+```text
+GET    /api/v1/knowledge?clientId=
+POST   /api/v1/knowledge
+PATCH  /api/v1/knowledge/:id
+GET    /api/v1/incidents?clientId=
+POST   /api/v1/incidents
+PATCH  /api/v1/incidents/:id
+POST   /api/v1/incidents/:id/evidence
+GET    /api/v1/incidents/:id/dossier
+PATCH  /api/v1/clients/:id/crisis
+POST   /api/v1/moderation/simulate
+```
+
+Crisis mode pauses auto-hide while AI still classifies into the human queue.
+
 ## Not in V1 HTTP API
 
 - `POST /api/v1/ai/moderate` — workers call `packages/ai` directly. Do not expose a generic LLM proxy.
 - `/api/v1/agents`
-- `/api/v1/knowledge`
 - `/api/v1/automations`
 - `/api/v1/analytics` (beyond thin moderation metrics)
+- Meta Ads bandeja (RF-14) — pending provider matrix / research
 
 Phase 4 may add `POST /api/v1/comments/:id/suggested-reply` as an application operation (tenant + RBAC + usage), never as a raw provider proxy.

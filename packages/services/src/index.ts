@@ -38,7 +38,21 @@ export {
   grantMembershipClientScope,
   listBrandsForAccess,
   listClients,
+  setClientCrisisMode,
 } from "./clients";
+export {
+  createKnowledgeDocument,
+  listKnowledgeDocuments,
+  updateKnowledgeDocument,
+} from "./knowledge";
+export {
+  addIncidentEvidence,
+  createIncident,
+  exportIncidentDossier,
+  listIncidents,
+  updateIncidentStatus,
+} from "./incidents";
+export { simulateModerationPolicy } from "./simulate";
 export {
   addOrganizationMember,
   listOrganizationMembers,

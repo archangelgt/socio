@@ -84,12 +84,27 @@ Unique: `organization_id + user_id`
 - name
 - slug
 - status (default `active`)
+- crisis_mode (boolean, default false) — pauses auto-hide; AI still classifies
 - created_at
 - updated_at
 
 Unique: `organization_id + slug`
 
 Agency folder for brands. Register creates a `default` client; existing orgs backfill one `default` client.
+
+## knowledge_documents (piloto / Brand Brain light)
+
+- id, organization_id, client_id, brand_id (nullable)
+- title, kind (`faq` | `tone` | `protocol` | `policy` | `url` | `note`)
+- body, source_url, status (`draft` | `active` | `archived`), authoritative
+- created_by_user_id, created_at, updated_at
+
+Index: `organization_id + client_id + status`
+
+## incidents + incident_evidence (piloto)
+
+- incidents: client-scoped crisis cases with severity, status (`open` | `monitoring` | `resolved` | `closed`), evidence flags, `crisis_enabled`
+- incident_evidence: notes/links attached to an incident; `sensitive` redacted from default dossier export
 
 ## membership_scopes
 

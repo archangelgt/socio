@@ -1,6 +1,7 @@
 import {
   type Database,
   brands,
+  clients,
   comments,
   moderationDecisions,
   moderationPolicies,
@@ -202,7 +203,7 @@ export async function processModeration(
   const adapter = getChannelAdapter(account?.provider ?? "mock", ctx.meta);
   const capabilities = adapter.capabilities();
 
-  const decision = evaluateModerationPolicy({
+  let decision = evaluateModerationPolicy({
     result,
     rules,
     policyConfidenceThreshold: policy?.confidenceThreshold ?? 0.9,
@@ -212,6 +213,27 @@ export async function processModeration(
       deleteComments: capabilities.deleteComments,
     },
   });
+
+  const [clientRow] = brand?.clientId
+    ? await ctx.db
+        .select({ crisisMode: clients.crisisMode })
+        .from(clients)
+        .where(eq(clients.id, brand.clientId))
+        .limit(1)
+    : [];
+
+  if (
+    clientRow?.crisisMode &&
+    decision.queueState === "AUTO_HIDDEN" &&
+    decision.action === "HIDE"
+  ) {
+    decision = {
+      ...decision,
+      action: "FLAG",
+      queueState: "REVIEW_REQUIRED",
+      reason: `${decision.reason} Crisis mode: auto-hide paused.`,
+    };
+  }
 
   const [saved] = await ctx.db
     .insert(moderationDecisions)
@@ -277,6 +299,7 @@ export async function processModeration(
       commentId: comment.id,
       status: decision.queueState,
       reason: decision.reason,
+      crisisMode: Boolean(clientRow?.crisisMode),
     },
   });
 
