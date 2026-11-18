@@ -399,13 +399,21 @@ export const api = {
       `/api/v1/conversations${clientId ? `?clientId=${encodeURIComponent(clientId)}` : ""}`,
       { organizationId },
     ),
-  queue: (organizationId: string, status?: string, clientId?: string) => {
+  queue: (
+    organizationId: string,
+    status?: string,
+    clientId?: string,
+    origin?: "organic" | "ad" | "boosted" | "paid",
+  ) => {
     const params = new URLSearchParams();
     if (status) {
       params.set("status", status);
     }
     if (clientId) {
       params.set("clientId", clientId);
+    }
+    if (origin) {
+      params.set("origin", origin);
     }
     const query = params.toString();
     return request<{
@@ -421,6 +429,10 @@ export const api = {
         urgency: string;
         urgencyReason: string | null;
         caseKind: string;
+        origin?: string;
+        adExternalId?: string | null;
+        creativeExternalId?: string | null;
+        campaignExternalId?: string | null;
         confidence: number | null;
         rationale: string | null;
         createdAt: string;

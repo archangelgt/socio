@@ -32,6 +32,10 @@ type MockCommentEvent = {
     authorDisplayName?: string;
     body: string;
     parentExternalCommentId?: string;
+    origin?: "organic" | "ad" | "boosted";
+    adExternalId?: string;
+    creativeExternalId?: string;
+    campaignExternalId?: string;
   };
   post?: { body?: string; permalink?: string };
 };

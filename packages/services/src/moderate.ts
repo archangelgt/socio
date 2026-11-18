@@ -326,6 +326,7 @@ export async function listModerationQueue(
   access: ClientAccess,
   status?: string,
   clientId?: string,
+  origin?: "organic" | "ad" | "boosted" | "paid",
 ) {
   const scope = clientScopeIds(access);
   const orphanFilters = [
@@ -379,6 +380,11 @@ export async function listModerationQueue(
   if (status && (QUEUE_STATES as readonly string[]).includes(status)) {
     filters.push(eq(comments.moderationStatus, status as QueueState));
   }
+  if (origin === "paid") {
+    filters.push(inArray(comments.origin, ["ad", "boosted"]));
+  } else if (origin === "organic" || origin === "ad" || origin === "boosted") {
+    filters.push(eq(comments.origin, origin));
+  }
 
   const rows = await db
     .select({
@@ -393,6 +399,10 @@ export async function listModerationQueue(
       urgencyOverride: comments.urgencyOverride,
       urgencyReason: comments.urgencyReason,
       caseKind: comments.caseKind,
+      origin: comments.origin,
+      adExternalId: comments.adExternalId,
+      creativeExternalId: comments.creativeExternalId,
+      campaignExternalId: comments.campaignExternalId,
       assignedUserId: comments.assignedUserId,
       attentionDueAt: comments.attentionDueAt,
       confidence: comments.aiConfidence,
@@ -430,6 +440,10 @@ export async function listModerationQueue(
       urgency,
       urgencyReason: row.urgencyReason,
       caseKind: row.caseKind,
+      origin: row.origin,
+      adExternalId: row.adExternalId,
+      creativeExternalId: row.creativeExternalId,
+      campaignExternalId: row.campaignExternalId,
       assignedUserId: row.assignedUserId,
       attentionDueAt: row.attentionDueAt,
       confidence: row.confidence,

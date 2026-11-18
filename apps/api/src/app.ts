@@ -1257,6 +1257,7 @@ export async function buildApp(options: AppOptions) {
       .object({
         status: z.string().optional(),
         clientId: z.string().uuid().optional(),
+        origin: z.enum(["organic", "ad", "boosted", "paid"]).optional(),
       })
       .parse(request.query);
     await hydrateMissingPostMedia(ctx, membership.organizationId);
@@ -1267,6 +1268,7 @@ export async function buildApp(options: AppOptions) {
         access,
         query.status,
         query.clientId,
+        query.origin,
       ),
     };
   });

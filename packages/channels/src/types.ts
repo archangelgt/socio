@@ -24,6 +24,11 @@ export type NormalizedComment = {
   authorExternalId: string;
   authorDisplayName?: string;
   body: string;
+  /** organic (default) | ad | boosted — paid/promoted comments for RF-14. */
+  origin?: "organic" | "ad" | "boosted";
+  adExternalId?: string;
+  creativeExternalId?: string;
+  campaignExternalId?: string;
 };
 
 export type NormalizedConversation = {

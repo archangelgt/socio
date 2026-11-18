@@ -96,6 +96,12 @@ export const publishDestinationStatusEnum = pgEnum(
   ["scheduled", "publishing", "published", "failed", "needs_mobile"],
 );
 
+export const commentOriginEnum = pgEnum("comment_origin", [
+  "organic",
+  "ad",
+  "boosted",
+]);
+
 export const caseKindEnum = pgEnum("case_kind", [
   "none",
   "attention",
@@ -491,6 +497,11 @@ export const comments = pgTable(
     attentionDueAt: timestamp("attention_due_at", { withTimezone: true }),
     aiConfidence: doublePrecision("ai_confidence"),
     language: text("language"),
+    /** organic | ad | boosted — RF-14 unified bandeja */
+    origin: commentOriginEnum("origin").notNull().default("organic"),
+    adExternalId: text("ad_external_id"),
+    creativeExternalId: text("creative_external_id"),
+    campaignExternalId: text("campaign_external_id"),
     ...timestamps,
   },
   (table) => [
@@ -506,6 +517,11 @@ export const comments = pgTable(
     index("comments_org_urgency_idx").on(
       table.organizationId,
       table.urgency,
+      table.createdAt,
+    ),
+    index("comments_org_origin_idx").on(
+      table.organizationId,
+      table.origin,
       table.createdAt,
     ),
   ],

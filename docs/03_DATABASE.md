@@ -106,6 +106,11 @@ Index: `organization_id + client_id + status`
 - incidents: client-scoped crisis cases with severity, status (`open` | `monitoring` | `resolved` | `closed`), evidence flags, `crisis_enabled`
 - incident_evidence: notes/links attached to an incident; `sensitive` redacted from default dossier export
 
+## comments.origin (RF-14)
+
+- `origin` (`organic` | `ad` | `boosted`, default `organic`)
+- `ad_external_id`, `creative_external_id`, `campaign_external_id` (nullable Meta refs)
+
 ## membership_scopes
 
 - id

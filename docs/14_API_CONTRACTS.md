@@ -174,6 +174,12 @@ Crisis mode pauses auto-hide while AI still classifies into the human queue.
 - `/api/v1/agents`
 - `/api/v1/automations`
 - `/api/v1/analytics` (beyond thin moderation metrics)
-- Meta Ads bandeja (RF-14) — pending provider matrix / research
-
 Phase 4 may add `POST /api/v1/comments/:id/suggested-reply` as an application operation (tenant + RBAC + usage), never as a raw provider proxy.
+
+### Moderation queue origin filter (RF-14)
+
+```text
+GET /api/v1/moderation/queue?origin=organic|ad|boosted|paid
+```
+
+`paid` = `ad` + `boosted`. Mock webhooks may set comment `origin` / ad refs; live Meta Ad Account sync is ADR-027.

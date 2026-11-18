@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { AdsPage } from "./AdsPage";
 import { CalendarPage } from "./CalendarPage";
 import { InvitePage, ShareMonthPage } from "./GuestPages";
 import {
@@ -20,7 +21,8 @@ type Page =
   | "calendar"
   | "knowledge"
   | "incidents"
-  | "simulate";
+  | "simulate"
+  | "ads";
 
 const ORG_STORAGE_KEY = "socio.activeOrganizationId";
 const MEMBER_ROLES = [
@@ -344,6 +346,30 @@ function FlaskIcon() {
         stroke="currentColor"
         strokeWidth="1.7"
         strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function AdsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <title>Ads</title>
+      <rect
+        x="3.5"
+        y="5"
+        width="17"
+        height="14"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M7 15.5V9.5l4 3 4-3v6"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );
@@ -723,6 +749,14 @@ export function App() {
             <FlaskIcon />
             Simulate
           </button>
+          <button
+            type="button"
+            className={page === "ads" ? "active" : ""}
+            onClick={() => setPage("ads")}
+          >
+            <AdsIcon />
+            Ads
+          </button>
           {canManageAccess(activeMembership?.role) ? (
             <button
               type="button"
@@ -847,6 +881,13 @@ export function App() {
         ) : null}
         {page === "simulate" && organizationId && clientId ? (
           <SimulatePage
+            organizationId={organizationId}
+            clientId={clientId}
+            setError={setError}
+          />
+        ) : null}
+        {page === "ads" && organizationId && clientId ? (
+          <AdsPage
             organizationId={organizationId}
             clientId={clientId}
             setError={setError}
@@ -1091,6 +1132,14 @@ function ModerationPage({
                           <div>{item.body}</div>
                           {item.caseKind && item.caseKind !== "none" ? (
                             <div className="muted">Case: {item.caseKind}</div>
+                          ) : null}
+                          {item.origin && item.origin !== "organic" ? (
+                            <div className="muted">
+                              Origin: {item.origin}
+                              {item.adExternalId
+                                ? ` · ad ${item.adExternalId}`
+                                : ""}
+                            </div>
                           ) : null}
                           {item.rationale ? (
                             <div className="muted">{item.rationale}</div>
