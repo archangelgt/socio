@@ -4,10 +4,20 @@ export {
   type MembershipRole,
 } from "./rbac";
 export {
+  allowedClientIds,
+  canManageClients,
+  filterByClientAccess,
+  isClientAllowed,
+  isOrgWideAccess,
+  resolveClientAccess,
+  type ClientAccess,
+} from "./scopes";
+export {
   ACTION_SOURCES,
   QUEUE_INBOUND_EVENTS,
   QUEUE_MODERATION,
   QUEUE_OUTBOUND_ACTIONS,
+  QUEUE_PUBLISH_DESTINATIONS,
   type ActionSource,
 } from "./queues";
 export {
@@ -39,3 +49,11 @@ export {
   type PlanDefinition,
   type PlanId,
 } from "./plans";
+export {
+  URGENCIES,
+  caseKindFromCategories,
+  computeUrgency,
+  effectiveUrgency,
+  urgencyRank,
+  type Urgency,
+} from "./urgency";

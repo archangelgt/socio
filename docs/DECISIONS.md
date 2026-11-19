@@ -165,3 +165,21 @@ Decision: Instagram and Facebook share `MetaChannelAdapter` (`provider` on store
 
 Reason: one Meta app, one webhook URL, ADR-021 uniqueness still applies per IG user id / Page id.
 
+## ADR-025 — Client between Organization and Brand
+
+Decision: tenancy hierarchy is Organization → Client → Brand → SocialAccount. `brands.client_id` is required (backfill one `default` client per org). `organization_id` remains denormalized on brands. Optional `membership_scopes` restrict a membership to client(s); OWNER/ADMIN with no scopes retain org-wide access. List APIs enforce scopes server-side.
+
+Reason: agencies need folders per client without reinterpreting Brand as the client, and piloto isolation requires grants in the same slice as the Client entity.
+
+## ADR-026 — AndyMorales piloto expands Frozen V1
+
+Decision: for the AndyMorales Studio pilot, Socio may ship calendar pieces, guest month share links, invitations, urgency (semáforo), Meta publish for approved pieces, client KB (documents light), incidents + crisis mode, policy simulation, and a unified moderation bandeja that tags comment `origin` (`organic` | `ad` | `boosted`) beyond the Frozen V1 wedge. Moderation Meta path remains the reliability baseline.
+
+Reason: product direction is AndyMorales on Socio (not a fork); the requirements MD is the pilot acceptance source.
+
+## ADR-027 — Meta Ads comments (RF-14) path
+
+Decision: store paid/promoted provenance on `comments` (`origin`, `ad_external_id`, `creative_external_id`, `campaign_external_id`) and filter the existing moderation queue rather than a separate ads product. Live Meta pull uses Marketing API creative → `effective_instagram_media_id` → IG `/comments` (non-organic); hide/unhide reuse Instagram comment moderation. Permissions: `instagram_manage_comments` plus `ads_read` or `ads_management` when Page role is via Business Manager. Mock webhooks may set `origin=ad` for piloto acceptance without Marketing API tokens. Full Ad Account sync / Advantage+ catalog ads remain out of scope until Meta app review grants ads scopes.
+
+Reason: RF-14 wants one bandeja with organic + pauta; Meta docs separate organic vs non-organic media IDs, so provenance columns + queue filter are the minimal contract.
+

@@ -18,7 +18,7 @@ const MOCK_CAPABILITIES: ChannelCapabilities = {
   deleteComments: false,
   replyToComments: true,
   sendMessages: true,
-  publishPosts: false,
+  publishPosts: true,
 };
 
 type MockCommentEvent = {
@@ -32,6 +32,10 @@ type MockCommentEvent = {
     authorDisplayName?: string;
     body: string;
     parentExternalCommentId?: string;
+    origin?: "organic" | "ad" | "boosted";
+    adExternalId?: string;
+    creativeExternalId?: string;
+    campaignExternalId?: string;
   };
   post?: { body?: string; permalink?: string };
 };
@@ -99,7 +103,16 @@ export class MockChannelAdapter implements ChannelAdapter {
     throw new UnsupportedChannelActionError("deleteComment", this.provider);
   }
 
-  async publish(_input: PublishInput): Promise<never> {
-    throw new UnsupportedChannelActionError("publish", this.provider);
+  async publish(input: PublishInput): Promise<{
+    ok: true;
+    externalPostId: string;
+    permalink: string;
+  }> {
+    const id = `mock-post-${input.accountId}-${Date.now()}`;
+    return {
+      ok: true,
+      externalPostId: id,
+      permalink: `https://example.com/mock/${id}`,
+    };
   }
 }

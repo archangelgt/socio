@@ -493,6 +493,117 @@ nav button.active {
   margin: 0.15rem 0 0.75rem;
 }
 
+.client-picker {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 0.85rem;
+}
+
+.client-picker span {
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.client-picker select {
+  width: 100%;
+  border: 1px solid rgb(248 250 252 / 16%);
+  border-radius: 0.55rem;
+  background: rgb(15 23 42 / 55%);
+  color: var(--white);
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+}
+
+.role-line {
+  margin: 0 0 0.75rem !important;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.team-panel {
+  margin-top: 1rem;
+}
+
+.team-form {
+  display: grid;
+  gap: 0.85rem;
+  max-width: 32rem;
+}
+
+.team-form label,
+.scope-fieldset {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+}
+
+.team-form input,
+.team-form select,
+.scope-multi {
+  border: 1px solid rgb(15 23 42 / 12%);
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--white);
+}
+
+.scope-fieldset {
+  border: 1px solid rgb(15 23 42 / 10%);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+}
+
+.scope-option {
+  display: flex !important;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.scope-multi {
+  min-height: 5.5rem;
+  width: min(16rem, 100%);
+}
+
+.page-header-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.urgency-pill {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  margin-right: 0.35rem;
+}
+
+.urgency-red {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.urgency-yellow {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.urgency-green {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.urgency-select {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+}
+
 .account button,
 form button[type="submit"],
 .button-row > button,

@@ -1,6 +1,7 @@
 import {
   type Database,
   brands,
+  clients,
   comments,
   moderationDecisions,
   moderationPolicies,
@@ -10,23 +11,30 @@ import {
   usageEvents,
 } from "@social-ai/db";
 import {
+  type ClientAccess,
   type ModerationAction,
   type ModerationCategory,
   type ModerationRule,
   QUEUE_STATES,
   type QueueState,
+  URGENCIES,
+  type Urgency,
+  caseKindFromCategories,
+  computeUrgency,
+  effectiveUrgency,
 } from "@social-ai/domain";
 import {
   evaluateModerationPolicy,
   parseModerationResult,
 } from "@social-ai/moderation";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getChannelAdapter } from "./adapters";
 import { writeAudit } from "./audit";
 import type { ServiceContext } from "./context";
 import { AppError } from "./errors";
 import { enqueueOutboundAction } from "./outbound";
 import { thumbnailFromMetadata } from "./posts";
+import { assertClientAllowed, clientScopeIds } from "./scopes";
 
 function publicProviderError(error: unknown): string {
   const raw = error instanceof Error ? error.message : "Unknown error";
@@ -195,7 +203,7 @@ export async function processModeration(
   const adapter = getChannelAdapter(account?.provider ?? "mock", ctx.meta);
   const capabilities = adapter.capabilities();
 
-  const decision = evaluateModerationPolicy({
+  let decision = evaluateModerationPolicy({
     result,
     rules,
     policyConfidenceThreshold: policy?.confidenceThreshold ?? 0.9,
@@ -205,6 +213,27 @@ export async function processModeration(
       deleteComments: capabilities.deleteComments,
     },
   });
+
+  const [clientRow] = brand?.clientId
+    ? await ctx.db
+        .select({ crisisMode: clients.crisisMode })
+        .from(clients)
+        .where(eq(clients.id, brand.clientId))
+        .limit(1)
+    : [];
+
+  if (
+    clientRow?.crisisMode &&
+    decision.queueState === "AUTO_HIDDEN" &&
+    decision.action === "HIDE"
+  ) {
+    decision = {
+      ...decision,
+      action: "FLAG",
+      queueState: "REVIEW_REQUIRED",
+      reason: `${decision.reason} Crisis mode: auto-hide paused.`,
+    };
+  }
 
   const [saved] = await ctx.db
     .insert(moderationDecisions)
@@ -226,11 +255,23 @@ export async function processModeration(
     })
     .returning();
 
+  const urgency = computeUrgency({
+    severity: result.severity,
+    categories: result.categories,
+  });
+  const caseKind = caseKindFromCategories(result.categories);
+
   await ctx.db
     .update(comments)
     .set({
       moderationStatus: decision.queueState,
       severity: result.severity,
+      urgency,
+      caseKind,
+      attentionDueAt:
+        caseKind === "complaint" || caseKind === "scam"
+          ? new Date(Date.now() + 24 * 60 * 60 * 1000)
+          : null,
       aiConfidence: result.overall_confidence,
     })
     .where(
@@ -258,6 +299,7 @@ export async function processModeration(
       commentId: comment.id,
       status: decision.queueState,
       reason: decision.reason,
+      crisisMode: Boolean(clientRow?.crisisMode),
     },
   });
 
@@ -281,8 +323,29 @@ export async function processModeration(
 export async function listModerationQueue(
   db: Database,
   organizationId: string,
+  access: ClientAccess,
   status?: string,
+  clientId?: string,
+  origin?: "organic" | "ad" | "boosted" | "paid",
 ) {
+  const scope = clientScopeIds(access);
+  const orphanFilters = [
+    eq(comments.organizationId, organizationId),
+    inArray(comments.moderationStatus, ["PENDING", "REVIEW_REQUIRED"]),
+    isNull(moderationDecisions.id),
+  ];
+  if (clientId) {
+    if (scope !== null && !scope.includes(clientId)) {
+      return [];
+    }
+    orphanFilters.push(eq(brands.clientId, clientId));
+  } else if (scope !== null) {
+    if (scope.length === 0) {
+      return [];
+    }
+    orphanFilters.push(inArray(brands.clientId, scope));
+  }
+
   const orphans = await db
     .select({
       id: comments.id,
@@ -290,17 +353,12 @@ export async function listModerationQueue(
       brandId: comments.brandId,
     })
     .from(comments)
+    .innerJoin(brands, eq(brands.id, comments.brandId))
     .leftJoin(
       moderationDecisions,
       eq(moderationDecisions.commentId, comments.id),
     )
-    .where(
-      and(
-        eq(comments.organizationId, organizationId),
-        inArray(comments.moderationStatus, ["PENDING", "REVIEW_REQUIRED"]),
-        isNull(moderationDecisions.id),
-      ),
-    );
+    .where(and(...orphanFilters));
 
   for (const orphan of orphans) {
     await insertFallbackDecision(db, orphan, {
@@ -314,8 +372,18 @@ export async function listModerationQueue(
     eq(moderationDecisions.organizationId, organizationId),
     eq(comments.organizationId, organizationId),
   ];
+  if (clientId) {
+    filters.push(eq(brands.clientId, clientId));
+  } else if (scope !== null) {
+    filters.push(inArray(brands.clientId, scope));
+  }
   if (status && (QUEUE_STATES as readonly string[]).includes(status)) {
     filters.push(eq(comments.moderationStatus, status as QueueState));
+  }
+  if (origin === "paid") {
+    filters.push(inArray(comments.origin, ["ad", "boosted"]));
+  } else if (origin === "organic" || origin === "ad" || origin === "boosted") {
+    filters.push(eq(comments.origin, origin));
   }
 
   const rows = await db
@@ -327,6 +395,16 @@ export async function listModerationQueue(
       commentStatus: comments.status,
       moderationStatus: comments.moderationStatus,
       severity: comments.severity,
+      urgency: comments.urgency,
+      urgencyOverride: comments.urgencyOverride,
+      urgencyReason: comments.urgencyReason,
+      caseKind: comments.caseKind,
+      origin: comments.origin,
+      adExternalId: comments.adExternalId,
+      creativeExternalId: comments.creativeExternalId,
+      campaignExternalId: comments.campaignExternalId,
+      assignedUserId: comments.assignedUserId,
+      attentionDueAt: comments.attentionDueAt,
       confidence: comments.aiConfidence,
       recommendedAction: moderationDecisions.recommendedAction,
       finalAction: moderationDecisions.finalAction,
@@ -339,29 +417,111 @@ export async function listModerationQueue(
     })
     .from(moderationDecisions)
     .innerJoin(comments, eq(comments.id, moderationDecisions.commentId))
+    .innerJoin(brands, eq(brands.id, comments.brandId))
     .leftJoin(posts, eq(posts.id, comments.postId))
     .where(and(...filters))
-    .orderBy(desc(moderationDecisions.createdAt))
+    .orderBy(
+      sql`case coalesce(${comments.urgencyOverride}, ${comments.urgency})
+        when 'RED' then 0 when 'YELLOW' then 1 else 2 end`,
+      desc(moderationDecisions.createdAt),
+    )
     .limit(100);
 
-  return rows.map((row) => ({
-    decisionId: row.decisionId,
-    commentId: row.commentId,
-    body: row.body,
-    authorDisplayName: row.authorDisplayName,
-    commentStatus: row.commentStatus,
-    moderationStatus: row.moderationStatus,
-    severity: row.severity,
-    confidence: row.confidence,
-    recommendedAction: row.recommendedAction,
-    finalAction: row.finalAction,
-    rationale: row.rationale,
-    createdAt: row.createdAt,
-    postId: row.postId,
-    postBody: row.postBody,
-    postPermalink: row.postPermalink,
-    postThumbnailUrl: thumbnailFromMetadata(row.postMetadata),
-  }));
+  return rows.map((row) => {
+    const urgency = effectiveUrgency(row.urgency, row.urgencyOverride);
+    return {
+      decisionId: row.decisionId,
+      commentId: row.commentId,
+      body: row.body,
+      authorDisplayName: row.authorDisplayName,
+      commentStatus: row.commentStatus,
+      moderationStatus: row.moderationStatus,
+      severity: row.severity,
+      urgency,
+      urgencyReason: row.urgencyReason,
+      caseKind: row.caseKind,
+      origin: row.origin,
+      adExternalId: row.adExternalId,
+      creativeExternalId: row.creativeExternalId,
+      campaignExternalId: row.campaignExternalId,
+      assignedUserId: row.assignedUserId,
+      attentionDueAt: row.attentionDueAt,
+      confidence: row.confidence,
+      recommendedAction: row.recommendedAction,
+      finalAction: row.finalAction,
+      rationale: row.rationale,
+      createdAt: row.createdAt,
+      postId: row.postId,
+      postBody: row.postBody,
+      postPermalink: row.postPermalink,
+      postThumbnailUrl: thumbnailFromMetadata(row.postMetadata),
+    };
+  });
+}
+
+export async function overrideCommentUrgency(
+  db: Database,
+  input: {
+    organizationId: string;
+    actorId: string;
+    access: ClientAccess;
+    commentId: string;
+    urgency: string;
+    reason: string;
+  },
+) {
+  if (!(URGENCIES as readonly string[]).includes(input.urgency)) {
+    throw new AppError(400, "VALIDATION_ERROR", "Invalid urgency.");
+  }
+  const reason = input.reason.trim();
+  if (!reason) {
+    throw new AppError(400, "VALIDATION_ERROR", "Reason is required.");
+  }
+
+  const [comment] = await db
+    .select({
+      id: comments.id,
+      brandId: comments.brandId,
+      clientId: brands.clientId,
+    })
+    .from(comments)
+    .innerJoin(brands, eq(brands.id, comments.brandId))
+    .where(
+      and(
+        eq(comments.id, input.commentId),
+        eq(comments.organizationId, input.organizationId),
+      ),
+    )
+    .limit(1);
+  if (!comment) {
+    throw new AppError(404, "COMMENT_NOT_FOUND", "Comment not found.");
+  }
+  assertClientAllowed(input.access, comment.clientId);
+
+  await db
+    .update(comments)
+    .set({
+      urgencyOverride: input.urgency as Urgency,
+      urgencyReason: reason,
+      updatedAt: new Date(),
+    })
+    .where(eq(comments.id, comment.id));
+
+  await writeAudit(db, {
+    organizationId: input.organizationId,
+    actorType: "user",
+    actorId: input.actorId,
+    eventType: "moderation.urgency_overridden",
+    entityType: "comment",
+    entityId: comment.id,
+    metadata: { urgency: input.urgency, reason },
+  });
+
+  return {
+    commentId: comment.id,
+    urgency: input.urgency,
+    reason,
+  };
 }
 
 export async function humanModerate(
@@ -371,6 +531,7 @@ export async function humanModerate(
     actorId: string;
     decisionId: string;
     action: "allow" | "hide" | "restore";
+    access: ClientAccess;
   },
 ) {
   const [decision] = await ctx.db
@@ -393,8 +554,15 @@ export async function humanModerate(
   }
 
   const [comment] = await ctx.db
-    .select()
+    .select({
+      id: comments.id,
+      brandId: comments.brandId,
+      socialAccountId: comments.socialAccountId,
+      status: comments.status,
+      clientId: brands.clientId,
+    })
     .from(comments)
+    .innerJoin(brands, eq(brands.id, comments.brandId))
     .where(
       and(
         eq(comments.id, decision.commentId),
@@ -406,6 +574,7 @@ export async function humanModerate(
   if (!comment) {
     throw new AppError(404, "COMMENT_NOT_FOUND", "Comment not found.");
   }
+  assertClientAllowed(input.access, comment.clientId);
 
   const [account] = await ctx.db
     .select({

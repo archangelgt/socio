@@ -12,11 +12,16 @@ users
 sessions
 invitations
 memberships
+clients
+membership_scopes
 brands
 social_accounts
 ```
 
+Hierarchy: Organization → Client → Brand → SocialAccount.
+
 Every lookup of tenant data takes `{ organizationId, id }`. Never `findX(id)` alone.
+Client isolation for members uses `membership_scopes` (optional grants per membership).
 
 ## organizations
 
@@ -72,10 +77,59 @@ Every lookup of tenant data takes `{ organizationId, id }`. Never `findX(id)` al
 
 Unique: `organization_id + user_id`
 
+## clients
+
+- id
+- organization_id
+- name
+- slug
+- status (default `active`)
+- crisis_mode (boolean, default false) — pauses auto-hide; AI still classifies
+- created_at
+- updated_at
+
+Unique: `organization_id + slug`
+
+Agency folder for brands. Register creates a `default` client; existing orgs backfill one `default` client.
+
+## knowledge_documents (piloto / Brand Brain light)
+
+- id, organization_id, client_id, brand_id (nullable)
+- title, kind (`faq` | `tone` | `protocol` | `policy` | `url` | `note`)
+- body, source_url, status (`draft` | `active` | `archived`), authoritative
+- created_by_user_id, created_at, updated_at
+
+Index: `organization_id + client_id + status`
+
+## incidents + incident_evidence (piloto)
+
+- incidents: client-scoped crisis cases with severity, status (`open` | `monitoring` | `resolved` | `closed`), evidence flags, `crisis_enabled`
+- incident_evidence: notes/links attached to an incident; `sensitive` redacted from default dossier export
+
+## comments.origin (RF-14)
+
+- `origin` (`organic` | `ad` | `boosted`, default `organic`)
+- `ad_external_id`, `creative_external_id`, `campaign_external_id` (nullable Meta refs)
+
+## membership_scopes
+
+- id
+- membership_id
+- organization_id (denormalized)
+- client_id
+- brand_id (nullable; reserved)
+- social_account_id (nullable; reserved)
+- created_at
+
+Unique: `membership_id + client_id`
+
+Zero rows for a membership = org-wide access (OWNER/ADMIN explicit; other roles backward-compatible). Rows restrict that membership to the listed client(s).
+
 ## brands
 
 - id
 - organization_id
+- client_id
 - name
 - slug
 - description
@@ -85,6 +139,8 @@ Unique: `organization_id + user_id`
 - updated_at
 
 Unique: `organization_id + slug`
+
+`organization_id` stays denormalized (ADR-001). `client_id` is required.
 
 V1 does not store tone_of_voice / ai_enabled on brands (Phase 3–4).
 

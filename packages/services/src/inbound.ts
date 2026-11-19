@@ -246,6 +246,11 @@ async function persistComment(
           )
           .limit(1);
 
+  const origin =
+    commentPayload.origin === "ad" || commentPayload.origin === "boosted"
+      ? commentPayload.origin
+      : "organic";
+
   const [comment] = await ctx.db
     .insert(comments)
     .values({
@@ -262,6 +267,10 @@ async function persistComment(
       body: commentPayload.body || "(empty comment)",
       status: "visible",
       moderationStatus: "PENDING",
+      origin,
+      adExternalId: commentPayload.adExternalId,
+      creativeExternalId: commentPayload.creativeExternalId,
+      campaignExternalId: commentPayload.campaignExternalId,
       ...(event.occurredAt &&
       !Number.isNaN(new Date(event.occurredAt).getTime())
         ? { createdAt: new Date(event.occurredAt) }

@@ -24,6 +24,11 @@ export type NormalizedComment = {
   authorExternalId: string;
   authorDisplayName?: string;
   body: string;
+  /** organic (default) | ad | boosted — paid/promoted comments for RF-14. */
+  origin?: "organic" | "ad" | "boosted";
+  adExternalId?: string;
+  creativeExternalId?: string;
+  campaignExternalId?: string;
 };
 
 export type NormalizedConversation = {
@@ -95,11 +100,20 @@ export type PublishInput = {
   organizationId: string;
   accountId: string;
   body: string;
+  /** Injected by the publish worker after decrypt. Never sent to the browser. */
+  accessToken?: string;
+  network?: "instagram" | "facebook";
+  /** Public HTTPS image URL when the format needs media (IG image publish). */
+  imageUrl?: string;
+  format?: "feed_text" | "feed_image";
 };
 
 export type PublishResult = {
   ok: boolean;
   externalPostId?: string;
+  permalink?: string;
+  /** Adapter could not complete on API; human must finish in the native app. */
+  needsMobile?: boolean;
 };
 
 export class UnsupportedChannelActionError extends Error {

@@ -31,13 +31,29 @@ POST /api/v1/auth/invitations/:token/accept
 
 ```text
 GET    /api/v1/organizations
-POST   /api/v1/organizations
-GET    /api/v1/organizations/:id
-PATCH  /api/v1/organizations/:id
-GET    /api/v1/organizations/:id/members
-POST   /api/v1/organizations/:id/invitations
-DELETE /api/v1/organizations/:id/members/:userId
+GET    /api/v1/members
+POST   /api/v1/members
+PATCH  /api/v1/members/:membershipId
+DELETE /api/v1/members/:membershipId
 ```
+
+Members routes use the active org (`X-Organization-Id`) and require ADMIN+.
+`POST /members` adds an existing user by email (optional `clientIds` for scopes).
+`PATCH` updates role. Empty `clientIds` on scope replace means org-wide access.
+
+## Clients
+
+```text
+GET   /api/v1/clients
+POST  /api/v1/clients
+POST  /api/v1/memberships/:membershipId/scopes
+PUT   /api/v1/memberships/:membershipId/scopes
+```
+
+List/create clients for the active organization. Responses respect `membership_scopes`
+(OWNER/ADMIN with no scopes see all clients). `PUT .../scopes` replaces the full
+client grant list (`clientIds: []` = org-wide). Optional query `clientId` on
+brand/channel/inbox list routes further narrows results; server still enforces scopes.
 
 ## Brands
 
@@ -133,12 +149,37 @@ POST /api/v1/webhooks/:provider/:accountId
 
 Prefer identifying the account from the payload after signature check. `:accountId` is allowed when the provider cannot route otherwise.
 
+## Piloto (ADR-026) — knowledge, incidents, simulation
+
+Client-scoped Brand Brain light, crisis workflow, and dry-run policy compare:
+
+```text
+GET    /api/v1/knowledge?clientId=
+POST   /api/v1/knowledge
+PATCH  /api/v1/knowledge/:id
+GET    /api/v1/incidents?clientId=
+POST   /api/v1/incidents
+PATCH  /api/v1/incidents/:id
+POST   /api/v1/incidents/:id/evidence
+GET    /api/v1/incidents/:id/dossier
+PATCH  /api/v1/clients/:id/crisis
+POST   /api/v1/moderation/simulate
+```
+
+Crisis mode pauses auto-hide while AI still classifies into the human queue.
+
 ## Not in V1 HTTP API
 
 - `POST /api/v1/ai/moderate` — workers call `packages/ai` directly. Do not expose a generic LLM proxy.
 - `/api/v1/agents`
-- `/api/v1/knowledge`
 - `/api/v1/automations`
 - `/api/v1/analytics` (beyond thin moderation metrics)
-
 Phase 4 may add `POST /api/v1/comments/:id/suggested-reply` as an application operation (tenant + RBAC + usage), never as a raw provider proxy.
+
+### Moderation queue origin filter (RF-14)
+
+```text
+GET /api/v1/moderation/queue?origin=organic|ad|boosted|paid
+```
+
+`paid` = `ad` + `boosted`. Mock webhooks may set comment `origin` / ad refs; live Meta Ad Account sync is ADR-027.

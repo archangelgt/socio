@@ -1,11 +1,59 @@
 import { useCallback, useEffect, useState } from "react";
+import { AdsPage } from "./AdsPage";
+import { CalendarPage } from "./CalendarPage";
+import { InvitePage, ShareMonthPage } from "./GuestPages";
+import {
+  IncidentsPage,
+  KnowledgePage,
+  SimulatePage,
+} from "./KnowledgeIncidentsPage";
 import { Mascot } from "./Mascot";
-import { type Session, api } from "./api";
+import { type ClientRow, type Session, api } from "./api";
 import { MarketingSite } from "./marketing/MarketingSite";
 import { t } from "./marketing/copy";
 import { detectLocale, href, navigate, parseRoute } from "./marketing/route";
 
-type Page = "inbox" | "moderation" | "channels";
+type Page =
+  | "inbox"
+  | "moderation"
+  | "channels"
+  | "team"
+  | "calendar"
+  | "knowledge"
+  | "incidents"
+  | "simulate"
+  | "ads";
+
+const ORG_STORAGE_KEY = "socio.activeOrganizationId";
+const MEMBER_ROLES = [
+  "OWNER",
+  "ADMIN",
+  "MANAGER",
+  "MODERATOR",
+  "AGENT",
+  "VIEWER",
+] as const;
+
+function canManageAccess(role: string | undefined): boolean {
+  return role === "OWNER" || role === "ADMIN";
+}
+
+function resolveOrganizationId(
+  memberships: Session["memberships"],
+  preferred?: string | null,
+): string {
+  if (
+    preferred &&
+    memberships.some((item) => item.organizationId === preferred)
+  ) {
+    return preferred;
+  }
+  const stored = window.localStorage.getItem(ORG_STORAGE_KEY);
+  if (stored && memberships.some((item) => item.organizationId === stored)) {
+    return stored;
+  }
+  return memberships[0]?.organizationId ?? "";
+}
 
 type DisplayStatus = "hidden" | "allowed" | "review" | "pending" | "failed";
 
@@ -220,6 +268,135 @@ function ChannelIcon() {
   );
 }
 
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <title>Calendar</title>
+      <rect
+        x="4"
+        y="5"
+        width="16"
+        height="15"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M8 3.5v3M16 3.5v3M4 9.5h16"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function BookIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <title>Knowledge</title>
+      <path
+        d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v15.5H7.5A2.5 2.5 0 0 0 5 21V5.5Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M5 18.5h12"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <title>Incidents</title>
+      <path
+        d="M12 4.5 20 19H4L12 4.5Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 10v4.5M12 16.8v.2"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function FlaskIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <title>Simulate</title>
+      <path
+        d="M9 3h6M10 3v6.2L5.5 18.5A2.2 2.2 0 0 0 7.4 22h9.2a2.2 2.2 0 0 0 1.9-3.5L14 9.2V3"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8.2 15h7.6"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function AdsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <title>Ads</title>
+      <rect
+        x="3.5"
+        y="5"
+        width="17"
+        height="14"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M7 15.5V9.5l4 3 4-3v6"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function UsersIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <title>Team</title>
+      <circle cx="9" cy="8" r="2.4" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="16.5" cy="9" r="2" stroke="currentColor" strokeWidth="1.7" />
+      <path
+        d="M4.5 17.5c.6-2.4 2.4-3.7 4.5-3.7s3.9 1.3 4.5 3.7"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+      <path
+        d="M14.2 17.5c.4-1.7 1.6-2.7 3.1-2.7 1.3 0 2.3.7 2.9 2"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function ProviderMark({ provider }: { provider: string }) {
   const label = providerLabel(provider);
   if (provider === "instagram") {
@@ -330,11 +507,16 @@ export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [page, setPage] = useState<Page>("moderation");
   const [error, setError] = useState<string | null>(null);
+  const [clients, setClients] = useState<ClientRow[]>([]);
+  const [clientId, setClientId] = useState<string>("");
+  const [organizationId, setOrganizationId] = useState<string>("");
   const [path, setPath] = useState(
     () => window.location.pathname + window.location.search,
   );
 
-  const organizationId = session?.memberships[0]?.organizationId;
+  const activeMembership = session?.memberships.find(
+    (item) => item.organizationId === organizationId,
+  );
   const pathname = path.split("?")[0] ?? "/";
   const route = parseRoute(pathname, navigator.language);
   const locale = detectLocale(navigator.language);
@@ -349,9 +531,51 @@ export function App() {
   useEffect(() => {
     void api
       .me()
-      .then(setSession)
+      .then((next) => {
+        setSession(next);
+        if (next) {
+          setOrganizationId(resolveOrganizationId(next.memberships));
+        }
+      })
       .catch(() => setSession(null));
   }, []);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+    if (
+      organizationId &&
+      session.memberships.some((item) => item.organizationId === organizationId)
+    ) {
+      window.localStorage.setItem(ORG_STORAGE_KEY, organizationId);
+      return;
+    }
+    const next = resolveOrganizationId(session.memberships, organizationId);
+    if (next !== organizationId) {
+      setOrganizationId(next);
+    }
+  }, [session, organizationId]);
+
+  useEffect(() => {
+    if (!organizationId) {
+      setClients([]);
+      setClientId("");
+      return;
+    }
+    void api
+      .clients(organizationId)
+      .then((data) => {
+        setClients(data.clients);
+        setClientId((current) => {
+          if (current && data.clients.some((item) => item.id === current)) {
+            return current;
+          }
+          return data.clients[0]?.id ?? "";
+        });
+      })
+      .catch((err: Error) => setError(err.message));
+  }, [organizationId]);
 
   useEffect(() => {
     if (route.kind === "redirect") {
@@ -404,6 +628,23 @@ export function App() {
         page={route.page}
         slug={route.slug}
         session={session}
+      />
+    );
+  }
+
+  if (route.kind === "share") {
+    return <ShareMonthPage token={route.token} />;
+  }
+
+  if (route.kind === "invite") {
+    return (
+      <InvitePage
+        token={route.token}
+        session={session}
+        onAccepted={(next) => {
+          setSession(next);
+          navigate("/app");
+        }}
       />
     );
   }
@@ -476,10 +717,98 @@ export function App() {
             <ChannelIcon />
             Channels
           </button>
+          <button
+            type="button"
+            className={page === "calendar" ? "active" : ""}
+            onClick={() => setPage("calendar")}
+          >
+            <CalendarIcon />
+            Calendar
+          </button>
+          <button
+            type="button"
+            className={page === "knowledge" ? "active" : ""}
+            onClick={() => setPage("knowledge")}
+          >
+            <BookIcon />
+            Knowledge
+          </button>
+          <button
+            type="button"
+            className={page === "incidents" ? "active" : ""}
+            onClick={() => setPage("incidents")}
+          >
+            <AlertIcon />
+            Incidents
+          </button>
+          <button
+            type="button"
+            className={page === "simulate" ? "active" : ""}
+            onClick={() => setPage("simulate")}
+          >
+            <FlaskIcon />
+            Simulate
+          </button>
+          <button
+            type="button"
+            className={page === "ads" ? "active" : ""}
+            onClick={() => setPage("ads")}
+          >
+            <AdsIcon />
+            Ads
+          </button>
+          {canManageAccess(activeMembership?.role) ? (
+            <button
+              type="button"
+              className={page === "team" ? "active" : ""}
+              onClick={() => setPage("team")}
+            >
+              <UsersIcon />
+              Team
+            </button>
+          ) : null}
         </nav>
         <div className="account">
           <p>{session.user.name}</p>
-          <p className="muted">{session.memberships[0]?.organizationName}</p>
+          {session.memberships.length > 1 ? (
+            <label className="client-picker">
+              <span className="muted">Workspace</span>
+              <select
+                value={organizationId}
+                onChange={(event) => {
+                  setOrganizationId(event.target.value);
+                  setPage("moderation");
+                  setError(null);
+                }}
+              >
+                {session.memberships.map((item) => (
+                  <option key={item.organizationId} value={item.organizationId}>
+                    {item.organizationName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <p className="muted">{activeMembership?.organizationName}</p>
+          )}
+          {activeMembership ? (
+            <p className="muted role-line">{activeMembership.role}</p>
+          ) : null}
+          {clients.length > 0 ? (
+            <label className="client-picker">
+              <span className="muted">Client</span>
+              <select
+                value={clientId}
+                onChange={(event) => setClientId(event.target.value)}
+              >
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <button
             type="button"
             onClick={() => {
@@ -499,14 +828,84 @@ export function App() {
       </aside>
       <section className="content">
         {error ? <p className="error">{error}</p> : null}
-        {page === "moderation" && organizationId ? (
-          <ModerationPage organizationId={organizationId} setError={setError} />
+        {page === "moderation" && organizationId && clientId ? (
+          <ModerationPage
+            organizationId={organizationId}
+            clientId={clientId}
+            setError={setError}
+          />
         ) : null}
-        {page === "inbox" && organizationId ? (
-          <InboxPage organizationId={organizationId} setError={setError} />
+        {page === "inbox" && organizationId && clientId ? (
+          <InboxPage
+            organizationId={organizationId}
+            clientId={clientId}
+            setError={setError}
+          />
         ) : null}
-        {page === "channels" && organizationId ? (
-          <ChannelsPage organizationId={organizationId} setError={setError} />
+        {page === "channels" && organizationId && clientId ? (
+          <ChannelsPage
+            organizationId={organizationId}
+            clientId={clientId}
+            setError={setError}
+          />
+        ) : null}
+        {page === "calendar" && organizationId && clientId ? (
+          <CalendarPage
+            organizationId={organizationId}
+            clientId={clientId}
+            setError={setError}
+          />
+        ) : null}
+        {page === "knowledge" && organizationId && clientId ? (
+          <KnowledgePage
+            organizationId={organizationId}
+            clientId={clientId}
+            setError={setError}
+          />
+        ) : null}
+        {page === "incidents" && organizationId && clientId ? (
+          <IncidentsPage
+            organizationId={organizationId}
+            clientId={clientId}
+            crisisMode={Boolean(
+              clients.find((item) => item.id === clientId)?.crisisMode,
+            )}
+            setError={setError}
+            onCrisisChanged={() => {
+              void api
+                .clients(organizationId)
+                .then((data) => setClients(data.clients))
+                .catch((err: Error) => setError(err.message));
+            }}
+          />
+        ) : null}
+        {page === "simulate" && organizationId && clientId ? (
+          <SimulatePage
+            organizationId={organizationId}
+            clientId={clientId}
+            setError={setError}
+          />
+        ) : null}
+        {page === "ads" && organizationId && clientId ? (
+          <AdsPage
+            organizationId={organizationId}
+            clientId={clientId}
+            setError={setError}
+          />
+        ) : null}
+        {page === "team" && organizationId ? (
+          <TeamPage
+            organizationId={organizationId}
+            organizationName={activeMembership?.organizationName ?? "Workspace"}
+            clients={clients}
+            setError={setError}
+            onClientsChanged={() => {
+              void api
+                .clients(organizationId)
+                .then((data) => setClients(data.clients))
+                .catch((err: Error) => setError(err.message));
+            }}
+          />
         ) : null}
       </section>
     </div>
@@ -653,9 +1052,11 @@ function AuthScreen({
 
 function ModerationPage({
   organizationId,
+  clientId,
   setError,
 }: {
   organizationId: string;
+  clientId: string;
   setError: (value: string | null) => void;
 }) {
   const [items, setItems] = useState<
@@ -665,10 +1066,10 @@ function ModerationPage({
 
   const reload = useCallback(() => {
     void api
-      .queue(organizationId)
+      .queue(organizationId, undefined, clientId)
       .then((data) => setItems(data.items))
       .catch((err: Error) => setError(err.message));
-  }, [organizationId, setError]);
+  }, [organizationId, clientId, setError]);
 
   useEffect(() => {
     reload();
@@ -713,7 +1114,7 @@ function ModerationPage({
                 <th>Comment</th>
                 <th>When</th>
                 <th>Status</th>
-                <th>Severity</th>
+                <th>Urgency</th>
                 <th>Confidence</th>
                 <th />
               </tr>
@@ -729,6 +1130,17 @@ function ModerationPage({
                         <div>
                           <strong>{item.authorDisplayName ?? "Unknown"}</strong>
                           <div>{item.body}</div>
+                          {item.caseKind && item.caseKind !== "none" ? (
+                            <div className="muted">Case: {item.caseKind}</div>
+                          ) : null}
+                          {item.origin && item.origin !== "organic" ? (
+                            <div className="muted">
+                              Origin: {item.origin}
+                              {item.adExternalId
+                                ? ` · ad ${item.adExternalId}`
+                                : ""}
+                            </div>
+                          ) : null}
                           {item.rationale ? (
                             <div className="muted">{item.rationale}</div>
                           ) : null}
@@ -743,7 +1155,38 @@ function ModerationPage({
                     <td>
                       <StatusBadge status={status} />
                     </td>
-                    <td>{item.severity ?? "—"}</td>
+                    <td>
+                      <span
+                        className={`urgency-pill urgency-${(item.urgency ?? "GREEN").toLowerCase()}`}
+                      >
+                        {item.urgency ?? "GREEN"}
+                      </span>
+                      <select
+                        className="urgency-select"
+                        value={item.urgency ?? "GREEN"}
+                        onChange={(event) => {
+                          const reason = window.prompt(
+                            "Reason for urgency change?",
+                          );
+                          if (!reason) {
+                            return;
+                          }
+                          void api
+                            .setUrgency(
+                              organizationId,
+                              item.commentId,
+                              event.target.value,
+                              reason,
+                            )
+                            .then(reload)
+                            .catch((err: Error) => setError(err.message));
+                        }}
+                      >
+                        <option value="RED">RED</option>
+                        <option value="YELLOW">YELLOW</option>
+                        <option value="GREEN">GREEN</option>
+                      </select>
+                    </td>
                     <td>
                       {item.confidence !== null
                         ? `${Math.round(item.confidence * 100)}%`
@@ -785,9 +1228,11 @@ function ModerationPage({
 
 function InboxPage({
   organizationId,
+  clientId,
   setError,
 }: {
   organizationId: string;
+  clientId: string;
   setError: (value: string | null) => void;
 }) {
   const [comments, setComments] = useState<
@@ -799,15 +1244,15 @@ function InboxPage({
 
   useEffect(() => {
     void Promise.all([
-      api.comments(organizationId),
-      api.conversations(organizationId),
+      api.comments(organizationId, clientId),
+      api.conversations(organizationId, clientId),
     ])
       .then(([commentData, conversationData]) => {
         setComments(commentData.comments);
         setConversations(conversationData.conversations);
       })
       .catch((err: Error) => setError(err.message));
-  }, [organizationId, setError]);
+  }, [organizationId, clientId, setError]);
 
   return (
     <>
@@ -882,9 +1327,11 @@ function InboxPage({
 
 function ChannelsPage({
   organizationId,
+  clientId,
   setError,
 }: {
   organizationId: string;
+  clientId: string;
   setError: (value: string | null) => void;
 }) {
   const [channels, setChannels] = useState<
@@ -895,16 +1342,17 @@ function ChannelsPage({
   const [metaConfigured, setMetaConfigured] = useState(false);
 
   const reload = useCallback(() => {
-    void Promise.all([api.channels(organizationId), api.brands(organizationId)])
+    void Promise.all([
+      api.channels(organizationId, clientId),
+      api.brands(organizationId, clientId),
+    ])
       .then(([channelData, brandData]) => {
         setChannels(channelData.channels);
         const first = brandData.brands[0];
-        if (first) {
-          setBrandId(first.id);
-        }
+        setBrandId(first?.id ?? "");
       })
       .catch((err: Error) => setError(err.message));
-  }, [organizationId, setError]);
+  }, [organizationId, clientId, setError]);
 
   useEffect(() => {
     reload();
@@ -1063,6 +1511,347 @@ function ChannelsPage({
           <button type="submit">Send webhook</button>
         </form>
       ) : null}
+    </>
+  );
+}
+
+function TeamPage({
+  organizationId,
+  organizationName,
+  clients,
+  setError,
+  onClientsChanged,
+}: {
+  organizationId: string;
+  organizationName: string;
+  clients: ClientRow[];
+  setError: (value: string | null) => void;
+  onClientsChanged: () => void;
+}) {
+  const [members, setMembers] = useState<
+    {
+      membershipId: string;
+      userId: string;
+      email: string;
+      name: string;
+      role: string;
+      clientIds: string[] | null;
+    }[]
+  >([]);
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<string>("MODERATOR");
+  const [scopeClientIds, setScopeClientIds] = useState<string[]>([]);
+  const [newClientName, setNewClientName] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const reload = useCallback(() => {
+    void api
+      .members(organizationId)
+      .then((data) => setMembers(data.members))
+      .catch((err: Error) => setError(err.message));
+  }, [organizationId, setError]);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  return (
+    <>
+      <header>
+        <h1>Team</h1>
+        <p className="muted">
+          Roles and client access for {organizationName}. Empty client scope =
+          whole workspace. Restrict a member to specific clients for isolation.
+        </p>
+      </header>
+
+      <section className="panel team-panel">
+        <h2>Invite by email</h2>
+        <p className="muted">
+          Creates a token link. Existing users can also be added directly below.
+        </p>
+        <form
+          className="team-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setBusy(true);
+            void api
+              .createInvitation(organizationId, {
+                email,
+                role,
+                clientIds:
+                  scopeClientIds.length > 0 ? scopeClientIds : undefined,
+              })
+              .then((data) => {
+                const url = `${window.location.origin}/invite/${data.invitation.token}`;
+                window.prompt("Copy invite link", url);
+                setEmail("");
+                setError(null);
+              })
+              .catch((err: Error) => setError(err.message))
+              .finally(() => setBusy(false));
+          }}
+        >
+          <label>
+            Email
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </label>
+          <label>
+            Role
+            <select
+              value={role}
+              onChange={(event) => setRole(event.target.value)}
+            >
+              {MEMBER_ROLES.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" disabled={busy}>
+            Create invite link
+          </button>
+        </form>
+      </section>
+
+      <section className="panel team-panel">
+        <h2>Add member</h2>
+        <p className="muted">
+          User must already have a Socio account. Optional client scope locks
+          them to those folders only.
+        </p>
+        <form
+          className="team-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setBusy(true);
+            void api
+              .addMember(organizationId, {
+                email,
+                role,
+                clientIds:
+                  scopeClientIds.length > 0 ? scopeClientIds : undefined,
+              })
+              .then(() => {
+                setEmail("");
+                setScopeClientIds([]);
+                setRole("MODERATOR");
+                setError(null);
+                reload();
+              })
+              .catch((err: Error) => setError(err.message))
+              .finally(() => setBusy(false));
+          }}
+        >
+          <label>
+            Email
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </label>
+          <label>
+            Role
+            <select
+              value={role}
+              onChange={(event) => setRole(event.target.value)}
+            >
+              {MEMBER_ROLES.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+          <fieldset className="scope-fieldset">
+            <legend>Client access</legend>
+            <label className="scope-option">
+              <input
+                type="checkbox"
+                checked={scopeClientIds.length === 0}
+                onChange={() => setScopeClientIds([])}
+              />
+              Entire workspace
+            </label>
+            {clients.map((client) => (
+              <label key={client.id} className="scope-option">
+                <input
+                  type="checkbox"
+                  checked={scopeClientIds.includes(client.id)}
+                  onChange={(event) => {
+                    setScopeClientIds((current) => {
+                      if (event.target.checked) {
+                        return [...current, client.id];
+                      }
+                      return current.filter((id) => id !== client.id);
+                    });
+                  }}
+                />
+                {client.name}
+              </label>
+            ))}
+          </fieldset>
+          <button type="submit" disabled={busy}>
+            Add member
+          </button>
+        </form>
+      </section>
+
+      <section className="panel team-panel">
+        <h2>Create client folder</h2>
+        <form
+          className="team-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setBusy(true);
+            void api
+              .createClient(organizationId, { name: newClientName })
+              .then(() => {
+                setNewClientName("");
+                setError(null);
+                onClientsChanged();
+              })
+              .catch((err: Error) => setError(err.message))
+              .finally(() => setBusy(false));
+          }}
+        >
+          <label>
+            Name
+            <input
+              required
+              value={newClientName}
+              onChange={(event) => setNewClientName(event.target.value)}
+              placeholder="AndyMorales Studio"
+            />
+          </label>
+          <button type="submit" disabled={busy}>
+            Create client
+          </button>
+        </form>
+      </section>
+
+      <section className="panel team-panel">
+        <h2>Members</h2>
+        {members.length === 0 ? (
+          <p className="muted">No members loaded.</p>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Role</th>
+                  <th>Client access</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((member) => (
+                  <tr key={member.membershipId}>
+                    <td>
+                      <strong>{member.name}</strong>
+                      <div className="muted">{member.email}</div>
+                    </td>
+                    <td>
+                      <select
+                        value={member.role}
+                        onChange={(event) => {
+                          void api
+                            .updateMemberRole(
+                              organizationId,
+                              member.membershipId,
+                              event.target.value,
+                            )
+                            .then(() => {
+                              setError(null);
+                              reload();
+                            })
+                            .catch((err: Error) => setError(err.message));
+                        }}
+                      >
+                        {MEMBER_ROLES.map((item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        multiple
+                        className="scope-multi"
+                        value={member.clientIds ?? []}
+                        onChange={(event) => {
+                          const selected = Array.from(
+                            event.target.selectedOptions,
+                          ).map((option) => option.value);
+                          void api
+                            .setMemberScopes(
+                              organizationId,
+                              member.membershipId,
+                              selected,
+                            )
+                            .then(() => {
+                              setError(null);
+                              reload();
+                            })
+                            .catch((err: Error) => setError(err.message));
+                        }}
+                      >
+                        {clients.map((client) => (
+                          <option key={client.id} value={client.id}>
+                            {client.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="muted">
+                        {member.clientIds === null
+                          ? "Entire workspace"
+                          : member.clientIds.length === 0
+                            ? "No clients"
+                            : `${member.clientIds.length} client(s)`}
+                        . Clear selection = entire workspace.
+                      </p>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="disconnect"
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              `Remove ${member.email} from this workspace?`,
+                            )
+                          ) {
+                            return;
+                          }
+                          void api
+                            .removeMember(organizationId, member.membershipId)
+                            .then(() => {
+                              setError(null);
+                              reload();
+                            })
+                            .catch((err: Error) => setError(err.message));
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </>
   );
 }
