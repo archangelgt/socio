@@ -177,11 +177,11 @@ Decision: for the AndyMorales Studio pilot, Socio may ship calendar pieces, gues
 
 Reason: product direction is AndyMorales on Socio (not a fork); the requirements MD is the pilot acceptance source.
 
-## ADR-028 — Zoho CPaaS for transactional invite email
+## ADR-028 — Zoho CPaaS for transactional auth email
 
-Decision: optional Zoho CPaaS Email API (`ZOHO_CPAAS_API_KEY` + `ZOHO_EMAIL_FROM`) sends workspace invite links. If unset or send fails, the invite is still created and the UI falls back to copy-link. Never call Zoho from the browser.
+Decision: optional Zoho CPaaS Email API (`ZOHO_CPAAS_API_KEY` + `ZOHO_EMAIL_FROM`) sends workspace invites, register welcome + set-password, forgot-password, and admin `POST /api/v1/members/welcome` provision mail. One-time tokens live in `auth_tokens` (`password_reset` | `welcome_set_password`), hashed, 48h TTL. If Zoho is unset or send fails, tokens/invites still exist and UI can copy links where applicable. Never call Zoho from the browser. DKIM/SPF for CPaaS must be completed in Zoho Domains so Outlook does not show “sender couldn’t be verified”.
 
-Reason: piloto Team invites need email delivery without standing up SMTP; Seraph already uses Zoho CPaaS.
+Reason: piloto Team invites and Andy onboarding need email delivery without standing up SMTP; Seraph already uses Zoho CPaaS.
 
 ## ADR-027 — Meta Ads comments (RF-14) path
 

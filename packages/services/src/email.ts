@@ -109,13 +109,102 @@ export function buildInviteEmail(input: {
     "",
     "If you didn't expect this invite, you can ignore this email.",
   ].join("\n");
-  const htmlBody = `
-<div style="font-family:system-ui,sans-serif;line-height:1.5;color:#111">
-  <p>You've been invited to join <strong>${escapeHtml(input.organizationName)}</strong> on Socio as <strong>${escapeHtml(input.role)}</strong>.</p>
-  <p><a href="${escapeHtml(input.inviteUrl)}" style="display:inline-block;padding:10px 16px;background:#111;color:#fff;text-decoration:none;border-radius:6px">Accept invite</a></p>
-  <p style="color:#666;font-size:13px">Or paste this link:<br>${escapeHtml(input.inviteUrl)}</p>
-</div>`.trim();
+  const htmlBody = ctaEmail({
+    lead: `You've been invited to join <strong>${escapeHtml(input.organizationName)}</strong> on Socio as <strong>${escapeHtml(input.role)}</strong>.`,
+    buttonLabel: "Accept invite",
+    url: input.inviteUrl,
+  });
   return { subject, htmlBody, textBody };
+}
+
+export function buildWelcomeSetPasswordEmail(input: {
+  name: string;
+  setPasswordUrl: string;
+  organizationName?: string;
+}): { subject: string; htmlBody: string; textBody: string } {
+  const workspace = input.organizationName
+    ? ` for ${input.organizationName}`
+    : "";
+  const subject = `Welcome to Socio${workspace} — set your password`;
+  const textBody = [
+    `Hi ${input.name},`,
+    "",
+    `Welcome to Socio${workspace}.`,
+    `Set your password here: ${input.setPasswordUrl}`,
+    "",
+    "This link expires in 48 hours.",
+  ].join("\n");
+  const htmlBody = ctaEmail({
+    lead: `Hi ${escapeHtml(input.name)}, welcome to Socio${input.organizationName ? ` — workspace <strong>${escapeHtml(input.organizationName)}</strong>` : ""}. Choose a password to open your account.`,
+    buttonLabel: "Set password",
+    url: input.setPasswordUrl,
+    footnote: "This link expires in 48 hours.",
+  });
+  return { subject, htmlBody, textBody };
+}
+
+export function buildPasswordResetEmail(input: {
+  name: string;
+  resetUrl: string;
+}): { subject: string; htmlBody: string; textBody: string } {
+  const subject = "Reset your Socio password";
+  const textBody = [
+    `Hi ${input.name},`,
+    "",
+    `Reset your password: ${input.resetUrl}`,
+    "",
+    "If you didn't ask for this, ignore the email. Link expires in 48 hours.",
+  ].join("\n");
+  const htmlBody = ctaEmail({
+    lead: `Hi ${escapeHtml(input.name)}, use the button below to reset your Socio password.`,
+    buttonLabel: "Reset password",
+    url: input.resetUrl,
+    footnote:
+      "If you didn't ask for this, ignore the email. Link expires in 48 hours.",
+  });
+  return { subject, htmlBody, textBody };
+}
+
+export function buildRegisterWelcomeEmail(input: {
+  name: string;
+  organizationName: string;
+  appUrl: string;
+  setPasswordUrl?: string;
+}): { subject: string; htmlBody: string; textBody: string } {
+  const subject = `Welcome to ${input.organizationName} on Socio`;
+  const lines = [
+    `Hi ${input.name},`,
+    "",
+    `Your workspace ${input.organizationName} is ready.`,
+    `Open Socio: ${input.appUrl}`,
+  ];
+  if (input.setPasswordUrl) {
+    lines.push("", `Set or change your password: ${input.setPasswordUrl}`);
+  }
+  const htmlBody = ctaEmail({
+    lead: `Hi ${escapeHtml(input.name)}, your workspace <strong>${escapeHtml(input.organizationName)}</strong> is ready.`,
+    buttonLabel: "Open Socio",
+    url: input.appUrl,
+    footnote: input.setPasswordUrl
+      ? `Or <a href="${escapeHtml(input.setPasswordUrl)}">set your password</a> from this device.`
+      : undefined,
+  });
+  return { subject, htmlBody, textBody: lines.join("\n") };
+}
+
+function ctaEmail(input: {
+  lead: string;
+  buttonLabel: string;
+  url: string;
+  footnote?: string;
+}): string {
+  return `
+<div style="font-family:system-ui,sans-serif;line-height:1.5;color:#111">
+  <p>${input.lead}</p>
+  <p><a href="${escapeHtml(input.url)}" style="display:inline-block;padding:10px 16px;background:#111;color:#fff;text-decoration:none;border-radius:6px">${escapeHtml(input.buttonLabel)}</a></p>
+  <p style="color:#666;font-size:13px">Or paste this link:<br>${escapeHtml(input.url)}</p>
+  ${input.footnote ? `<p style="color:#666;font-size:13px">${input.footnote}</p>` : ""}
+</div>`.trim();
 }
 
 function escapeHtml(value: string): string {

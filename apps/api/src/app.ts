@@ -16,6 +16,7 @@ import {
   checkoutConfigFromEnv,
   clientAccessFromMembership,
   completeMetaOAuth,
+  completePasswordSet,
   connectMockChannel,
   createCheckoutSession,
   createClient,
@@ -52,13 +53,17 @@ import {
   logoutSession,
   overrideCommentUrgency,
   previewInvitation,
+  previewPasswordToken,
   processDuePublishDestinations,
+  provisionUserWelcome,
   registerUser,
   removeOrganizationMember,
+  requestPasswordReset,
   requireMembership,
   resolveSession,
   retryFailedDestination,
   schedulePiecePublish,
+  sendWelcomeSetPasswordEmail,
   sendZohoEmail,
   setClientCrisisMode,
   setMembershipClientScopes,
@@ -263,7 +268,25 @@ export async function buildApp(options: AppOptions) {
     const body = registerSchema.parse(request.body);
     const result = await registerUser(ctx.db, body);
     setSessionCookie(reply, result.sessionToken);
-    return { user: result.user, memberships: result.memberships };
+
+    // Best-effort welcome + set-password email.
+    let welcomeEmailed = false;
+    try {
+      const welcome = await sendWelcomeSetPasswordEmail(ctx.db, {
+        userId: result.user.id,
+        webOrigin: options.webOrigin,
+        organizationName: result.memberships[0]?.organizationName,
+      });
+      welcomeEmailed = welcome.emailed;
+    } catch {
+      welcomeEmailed = false;
+    }
+
+    return {
+      user: result.user,
+      memberships: result.memberships,
+      welcomeEmailed,
+    };
   });
 
   app.post("/api/v1/auth/login", async (request, reply) => {
@@ -288,6 +311,61 @@ export async function buildApp(options: AppOptions) {
       throw new AppError(401, "UNAUTHENTICATED", "Sign in required.");
     }
     return session;
+  });
+
+  app.post("/api/v1/auth/forgot-password", async (request) => {
+    const ctx = requireCtx(options.ctx);
+    const body = z.object({ email: z.string().email() }).parse(request.body);
+    return requestPasswordReset(ctx.db, {
+      email: body.email,
+      webOrigin: options.webOrigin,
+    });
+  });
+
+  app.get("/api/v1/auth/password-token/:token", async (request) => {
+    const ctx = requireCtx(options.ctx);
+    const params = z.object({ token: z.string().min(8) }).parse(request.params);
+    return { token: await previewPasswordToken(ctx.db, params.token) };
+  });
+
+  app.post("/api/v1/auth/set-password", async (request, reply) => {
+    const ctx = requireCtx(options.ctx);
+    const body = z
+      .object({
+        token: z.string().min(8),
+        password: z.string().min(8),
+      })
+      .parse(request.body);
+    const result = await completePasswordSet(ctx.db, body);
+    setSessionCookie(reply, result.sessionToken);
+    return { user: result.user, memberships: result.memberships };
+  });
+
+  /** OWNER/ADMIN: re-send welcome set-password and ensure membership. */
+  app.post("/api/v1/members/welcome", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "ADMIN",
+    );
+    const body = z
+      .object({
+        email: z.string().email(),
+        name: z.string().min(1).optional(),
+        role: z
+          .enum(["OWNER", "ADMIN", "MANAGER", "MODERATOR", "AGENT", "VIEWER"])
+          .optional(),
+      })
+      .parse(request.body);
+    const result = await provisionUserWelcome(ctx.db, {
+      email: body.email,
+      name: body.name ?? body.email.split("@")[0] ?? "Member",
+      organizationId: membership.organizationId,
+      role: body.role ?? "MANAGER",
+      webOrigin: options.webOrigin,
+    });
+    return result;
   });
 
   app.get("/api/v1/auth/invitations/:token", async (request) => {

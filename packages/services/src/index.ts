@@ -69,10 +69,20 @@ export {
 } from "./invitations";
 export {
   buildInviteEmail,
+  buildPasswordResetEmail,
+  buildRegisterWelcomeEmail,
+  buildWelcomeSetPasswordEmail,
   sendZohoEmail,
   zohoEmailConfigFromEnv,
   type ZohoEmailConfig,
 } from "./email";
+export {
+  completePasswordSet,
+  previewPasswordToken,
+  provisionUserWelcome,
+  requestPasswordReset,
+  sendWelcomeSetPasswordEmail,
+} from "./password-tokens";
 export {
   addShareFeedback,
   createContentPiece,

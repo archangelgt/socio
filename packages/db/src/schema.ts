@@ -151,6 +151,32 @@ export const users = pgTable("users", {
   ...timestamps,
 });
 
+export const authTokenPurposeEnum = pgEnum("auth_token_purpose", [
+  "password_reset",
+  "welcome_set_password",
+]);
+
+/** One-time links for forgot-password and welcome set-password. */
+export const authTokens = pgTable(
+  "auth_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    purpose: authTokenPurposeEnum("purpose").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("auth_tokens_user_purpose_idx").on(table.userId, table.purpose),
+  ],
+);
+
 export const sessions = pgTable("sessions", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id")

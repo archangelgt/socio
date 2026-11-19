@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { AdsPage } from "./AdsPage";
 import { CalendarPage } from "./CalendarPage";
-import { InvitePage, ShareMonthPage } from "./GuestPages";
+import {
+  ForgotPasswordPage,
+  InvitePage,
+  SetPasswordPage,
+  ShareMonthPage,
+} from "./GuestPages";
 import {
   IncidentsPage,
   KnowledgePage,
@@ -649,6 +654,22 @@ export function App() {
     );
   }
 
+  if (route.kind === "forgot-password") {
+    return <ForgotPasswordPage />;
+  }
+
+  if (route.kind === "set-password") {
+    return (
+      <SetPasswordPage
+        token={route.token}
+        onAuthed={(next) => {
+          setSession(next);
+          navigate("/app");
+        }}
+      />
+    );
+  }
+
   if (route.kind === "login") {
     return (
       <AuthScreen
@@ -1030,6 +1051,19 @@ function AuthScreen({
             {mode === "register" ? "Let AI do the hard work →" : "Sign in"}
           </button>
         </form>
+        {mode === "login" ? (
+          <p className="muted">
+            <a
+              href="/forgot-password"
+              onClick={(event) => {
+                event.preventDefault();
+                navigate("/forgot-password");
+              }}
+            >
+              Forgot password?
+            </a>
+          </p>
+        ) : null}
         <p className="auth-legal">
           {mode === "register" ? (
             <>
