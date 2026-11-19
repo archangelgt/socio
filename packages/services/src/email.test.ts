@@ -26,6 +26,9 @@ describe("email", () => {
     });
     expect(welcome.subject).toContain("set your password");
     expect(welcome.htmlBody).toContain("/set-password/tok");
+    expect(welcome.htmlBody).toContain("/brand/mark.png");
+    expect(welcome.htmlBody).toContain("Welcome aboard");
+    expect(welcome.htmlBody).toContain("Set password →");
 
     const reset = buildPasswordResetEmail({
       name: "Andy",
@@ -33,6 +36,7 @@ describe("email", () => {
     });
     expect(reset.subject).toContain("Reset");
     expect(reset.textBody).toContain("/set-password/reset");
+    expect(reset.htmlBody).toContain("Password reset");
   });
 
   it("requires api key and from address", () => {
