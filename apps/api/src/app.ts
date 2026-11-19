@@ -12,6 +12,7 @@ import {
   addOrganizationMember,
   addShareFeedback,
   assertBrandInAccess,
+  buildInviteEmail,
   checkoutConfigFromEnv,
   clientAccessFromMembership,
   completeMetaOAuth,
@@ -58,6 +59,7 @@ import {
   resolveSession,
   retryFailedDestination,
   schedulePiecePublish,
+  sendZohoEmail,
   setClientCrisisMode,
   setMembershipClientScopes,
   simulateModerationPolicy,
@@ -67,6 +69,7 @@ import {
   updateIncidentStatus,
   updateKnowledgeDocument,
   updateOrganizationMemberRole,
+  zohoEmailConfigFromEnv,
 } from "@social-ai/services";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { ZodError, z } from "zod";
@@ -552,7 +555,36 @@ export async function buildApp(options: AppOptions) {
       role: body.role,
       clientIds: body.clientIds,
     });
-    return { invitation };
+    const inviteUrl = new URL(
+      `/invite/${invitation.token}`,
+      options.webOrigin,
+    ).toString();
+    const mailer = zohoEmailConfigFromEnv();
+    let emailSent = false;
+    let emailError: string | null = null;
+    if (mailer) {
+      try {
+        const content = buildInviteEmail({
+          organizationName: membership.organizationName,
+          inviteUrl,
+          role: invitation.role,
+        });
+        await sendZohoEmail(mailer, {
+          to: { address: invitation.email },
+          subject: content.subject,
+          htmlBody: content.htmlBody,
+          textBody: content.textBody,
+          clientReference: `invite-${invitation.id}`,
+        });
+        emailSent = true;
+      } catch (err) {
+        emailError =
+          err instanceof Error
+            ? err.message.slice(0, 300)
+            : "Email send failed";
+      }
+    }
+    return { invitation, inviteUrl, emailSent, emailError };
   });
 
   app.get("/api/v1/calendar/pieces", async (request) => {

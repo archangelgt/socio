@@ -177,6 +177,12 @@ Decision: for the AndyMorales Studio pilot, Socio may ship calendar pieces, gues
 
 Reason: product direction is AndyMorales on Socio (not a fork); the requirements MD is the pilot acceptance source.
 
+## ADR-028 — Zoho CPaaS for transactional invite email
+
+Decision: optional Zoho CPaaS Email API (`ZOHO_CPAAS_API_KEY` + `ZOHO_EMAIL_FROM`) sends workspace invite links. If unset or send fails, the invite is still created and the UI falls back to copy-link. Never call Zoho from the browser.
+
+Reason: piloto Team invites need email delivery without standing up SMTP; Seraph already uses Zoho CPaaS.
+
 ## ADR-027 — Meta Ads comments (RF-14) path
 
 Decision: store paid/promoted provenance on `comments` (`origin`, `ad_external_id`, `creative_external_id`, `campaign_external_id`) and filter the existing moderation queue rather than a separate ads product. Live Meta pull uses Marketing API creative → `effective_instagram_media_id` → IG `/comments` (non-organic); hide/unhide reuse Instagram comment moderation. Permissions: `instagram_manage_comments` plus `ads_read` or `ads_management` when Page role is via Business Manager. Mock webhooks may set `origin=ad` for piloto acceptance without Marketing API tokens. Full Ad Account sync / Advantage+ catalog ads remain out of scope until Meta app review grants ads scopes.

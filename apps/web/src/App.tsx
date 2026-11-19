@@ -1583,8 +1583,19 @@ function TeamPage({
                   scopeClientIds.length > 0 ? scopeClientIds : undefined,
               })
               .then((data) => {
-                const url = `${window.location.origin}/invite/${data.invitation.token}`;
-                window.prompt("Copy invite link", url);
+                const url =
+                  data.inviteUrl ??
+                  `${window.location.origin}/invite/${data.invitation.token}`;
+                if (data.emailSent) {
+                  window.alert(`Invite emailed to ${data.invitation.email}`);
+                } else {
+                  window.prompt(
+                    data.emailError
+                      ? `Email failed (${data.emailError}). Copy invite link`
+                      : "Copy invite link",
+                    url,
+                  );
+                }
                 setEmail("");
                 setError(null);
               })
@@ -1615,7 +1626,7 @@ function TeamPage({
             </select>
           </label>
           <button type="submit" disabled={busy}>
-            Create invite link
+            Send invite
           </button>
         </form>
       </section>

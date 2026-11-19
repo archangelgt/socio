@@ -68,6 +68,12 @@ export {
   previewInvitation,
 } from "./invitations";
 export {
+  buildInviteEmail,
+  sendZohoEmail,
+  zohoEmailConfigFromEnv,
+  type ZohoEmailConfig,
+} from "./email";
+export {
   addShareFeedback,
   createContentPiece,
   createMonthShareLink,

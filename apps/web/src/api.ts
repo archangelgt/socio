@@ -167,6 +167,9 @@ export const api = {
         token: string;
         expiresAt: string;
       };
+      inviteUrl: string;
+      emailSent: boolean;
+      emailError: string | null;
     }>("/api/v1/invitations", {
       method: "POST",
       organizationId,
