@@ -79,6 +79,36 @@ export const api = {
   login: (body: { email: string; password: string }) =>
     request<Session>("/api/v1/auth/login", { method: "POST", body }),
   logout: () => request("/api/v1/auth/logout", { method: "POST" }),
+  forgotPassword: (body: { email: string }) =>
+    request<{ accepted: true; emailed: boolean }>(
+      "/api/v1/auth/forgot-password",
+      { method: "POST", body },
+    ),
+  previewPasswordToken: (token: string) =>
+    request<{
+      token: {
+        purpose: string;
+        email: string;
+        name: string;
+        expiresAt: string;
+      };
+    }>(`/api/v1/auth/password-token/${token}`),
+  setPassword: (body: { token: string; password: string }) =>
+    request<Session>("/api/v1/auth/set-password", { method: "POST", body }),
+  provisionWelcome: (
+    organizationId: string,
+    body: { email: string; name?: string; role?: string },
+  ) =>
+    request<{
+      userId: string;
+      membershipId: string;
+      createdUser: boolean;
+      emailed: boolean;
+    }>("/api/v1/members/welcome", {
+      method: "POST",
+      organizationId,
+      body,
+    }),
   clients: (organizationId: string) =>
     request<{ clients: ClientRow[] }>("/api/v1/clients", { organizationId }),
   createClient: (
@@ -167,6 +197,9 @@ export const api = {
         token: string;
         expiresAt: string;
       };
+      inviteUrl: string;
+      emailSent: boolean;
+      emailError: string | null;
     }>("/api/v1/invitations", {
       method: "POST",
       organizationId,

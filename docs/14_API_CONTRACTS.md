@@ -24,8 +24,17 @@ POST /api/v1/auth/register
 POST /api/v1/auth/login
 POST /api/v1/auth/logout
 GET  /api/v1/auth/me
+POST /api/v1/auth/forgot-password
+GET  /api/v1/auth/password-token/:token
+POST /api/v1/auth/set-password
+GET  /api/v1/auth/invitations/:token
 POST /api/v1/auth/invitations/:token/accept
 ```
+
+`forgot-password` always returns `{ accepted: true }` (no email enumeration).
+`set-password` consumes a one-time `auth_tokens` link (`password_reset` or
+`welcome_set_password`) and opens a session cookie. Register also best-effort
+sends a welcome set-password email when Zoho is configured.
 
 ## Organizations and members
 
@@ -33,12 +42,15 @@ POST /api/v1/auth/invitations/:token/accept
 GET    /api/v1/organizations
 GET    /api/v1/members
 POST   /api/v1/members
+POST   /api/v1/members/welcome
 PATCH  /api/v1/members/:membershipId
 DELETE /api/v1/members/:membershipId
 ```
 
 Members routes use the active org (`X-Organization-Id`) and require ADMIN+.
 `POST /members` adds an existing user by email (optional `clientIds` for scopes).
+`POST /members/welcome` ensures membership (creates user if missing) and emails
+a set-password welcome link.
 `PATCH` updates role. Empty `clientIds` on scope replace means org-wide access.
 
 ## Clients

@@ -54,6 +54,18 @@ Client isolation for members uses `membership_scopes` (optional grants per membe
 - user_agent
 - created_at
 
+## auth_tokens
+
+- id
+- user_id
+- purpose (`password_reset` | `welcome_set_password`)
+- token_hash (unique)
+- expires_at
+- used_at
+- created_at
+
+One-time hashed links for forgot-password and welcome set-password (48h TTL).
+
 ## invitations
 
 - id

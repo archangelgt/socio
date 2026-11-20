@@ -12,6 +12,8 @@ export type MarketingPage =
 export type AppRoute =
   | { kind: "redirect"; to: string }
   | { kind: "login" }
+  | { kind: "forgot-password" }
+  | { kind: "set-password"; token: string }
   | { kind: "app" }
   | { kind: "invite"; token: string }
   | { kind: "share"; token: string }
@@ -37,6 +39,15 @@ export function parseRoute(pathname: string, language = "es"): AppRoute {
   const clean = pathname.replace(/\/+$/, "") || "/";
   if (clean === "/login") {
     return { kind: "login" };
+  }
+  if (clean === "/forgot-password") {
+    return { kind: "forgot-password" };
+  }
+  if (clean.startsWith("/set-password/")) {
+    const token = clean.slice("/set-password/".length);
+    if (token) {
+      return { kind: "set-password", token };
+    }
   }
   if (clean === "/app") {
     return { kind: "app" };

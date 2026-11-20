@@ -83,6 +83,10 @@ services:
       TILOPAY_API_KEY: ${TILOPAY_API_KEY:-}
       TILOPAY_API_USER: ${TILOPAY_API_USER:-}
       TILOPAY_API_PASSWORD: ${TILOPAY_API_PASSWORD:-}
+      ZOHO_CPAAS_API_KEY: ${ZOHO_CPAAS_API_KEY:-}
+      ZOHO_EMAIL_FROM: ${ZOHO_EMAIL_FROM:-}
+      ZOHO_EMAIL_FROM_NAME: ${ZOHO_EMAIL_FROM_NAME:-Socio}
+      ZOHO_CPAAS_EMAIL_URL: ${ZOHO_CPAAS_EMAIL_URL:-https://cpaas.zoho.com/v1.1/email}
     depends_on:
       postgres:
         condition: service_healthy
