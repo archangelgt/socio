@@ -84,6 +84,8 @@ export async function createContentPiece(
     brandId?: string;
     title: string;
     copyText?: string;
+    notesInternal?: string;
+    notesClient?: string;
     imageUrl?: string;
     scheduledAt?: string | null;
     timezone?: string;
@@ -122,6 +124,8 @@ export async function createContentPiece(
     contentPieceId: piece.id,
     version: 1,
     copyText: input.copyText?.trim() ?? "",
+    notesInternal: input.notesInternal?.trim() ?? "",
+    notesClient: input.notesClient?.trim() ?? "",
     mediaJson,
     createdByUserId: input.actorId,
   });

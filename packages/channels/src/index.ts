@@ -16,8 +16,11 @@ export {
   subscribeMetaPage,
   subscribeMetaInstagram,
   listInstagramMediaComments,
+  listAdCreativesWithIgMedia,
+  listInstagramAdMediaComments,
   fetchInstagramMedia,
   pickMediaThumbnail,
+  type AdCreativeIgMedia,
   type MetaPage,
 } from "./meta-graph";
 export {

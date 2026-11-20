@@ -240,6 +240,8 @@ export const api = {
       clientId: string;
       title: string;
       copyText?: string;
+      notesInternal?: string;
+      notesClient?: string;
       imageUrl?: string;
       scheduledAt?: string;
     },
@@ -466,6 +468,9 @@ export const api = {
         adExternalId?: string | null;
         creativeExternalId?: string | null;
         campaignExternalId?: string | null;
+        assignedUserId?: string | null;
+        attentionDueAt?: string | null;
+        tags?: { id: string; name: string }[];
         confidence: number | null;
         rationale: string | null;
         createdAt: string;
@@ -491,6 +496,129 @@ export const api = {
     request(`/api/v1/moderation/decisions/${id}/restore`, {
       method: "POST",
       organizationId,
+    }),
+  assignees: (organizationId: string) =>
+    request<{
+      members: { userId: string; name: string; email: string; role: string }[];
+    }>("/api/v1/assignees", { organizationId }),
+  assignComment: (
+    organizationId: string,
+    commentId: string,
+    assignedUserId: string | null,
+  ) =>
+    request(`/api/v1/comments/${commentId}/assign`, {
+      method: "POST",
+      organizationId,
+      body: { assignedUserId },
+    }),
+  setCase: (
+    organizationId: string,
+    commentId: string,
+    body: { caseKind: string; attentionDueAt?: string | null },
+  ) =>
+    request(`/api/v1/comments/${commentId}/case`, {
+      method: "POST",
+      organizationId,
+      body,
+    }),
+  tags: (organizationId: string) =>
+    request<{ tags: { id: string; name: string; brandId: string | null }[] }>(
+      "/api/v1/tags",
+      { organizationId },
+    ),
+  createTag: (organizationId: string, name: string) =>
+    request<{ tag: { id: string; name: string } }>("/api/v1/tags", {
+      method: "POST",
+      organizationId,
+      body: { name },
+    }),
+  tagComment: (organizationId: string, commentId: string, tagId: string) =>
+    request(`/api/v1/comments/${commentId}/tags`, {
+      method: "POST",
+      organizationId,
+      body: { tagId },
+    }),
+  untagComment: (organizationId: string, commentId: string, tagId: string) =>
+    request(`/api/v1/comments/${commentId}/tags/${tagId}`, {
+      method: "DELETE",
+      organizationId,
+    }),
+  syncAds: (
+    organizationId: string,
+    body: {
+      socialAccountId?: string;
+      adAccountId?: string;
+      creatives?: {
+        creativeId: string;
+        mediaId: string;
+        adExternalId?: string;
+        campaignExternalId?: string;
+        permalink?: string;
+      }[];
+    },
+  ) =>
+    request<{
+      ingested: number;
+      seen: number;
+      creatives: number;
+      warnings: string[];
+    }>("/api/v1/comments/sync-ads", {
+      method: "POST",
+      organizationId,
+      body,
+    }),
+  moderationMetrics: (organizationId: string, clientId?: string) =>
+    request<{
+      metrics: {
+        analyzed: number;
+        allowed: number;
+        autoHidden: number;
+        reviewRequired: number;
+        pending: number;
+        overridden: number;
+        falsePositives: number;
+        actionFailures: number;
+        casesOpen: number;
+        redUrgency: number;
+        byCategory: { category: string; count: number }[];
+      };
+    }>(
+      `/api/v1/moderation/metrics${clientId ? `?clientId=${encodeURIComponent(clientId)}` : ""}`,
+      { organizationId },
+    ),
+  evalModeration: (
+    organizationId: string,
+    body: {
+      clientId: string;
+      useDefaultFixtures?: boolean;
+      cases?: { text: string; expectHide: boolean; locale?: string }[];
+      brandId?: string;
+    },
+  ) =>
+    request<{
+      brandName: string;
+      threshold: number;
+      labeled: number;
+      truePositive: number;
+      trueNegative: number;
+      falsePositive: number;
+      falseNegative: number;
+      precision: number | null;
+      recall: number | null;
+      accuracy: number;
+      results: {
+        text: string;
+        expectHide: boolean;
+        predictedHide: boolean;
+        correct: boolean;
+        queueState: string;
+        severity: string;
+        confidence: number;
+      }[];
+    }>("/api/v1/moderation/eval", {
+      method: "POST",
+      organizationId,
+      body,
     }),
   simulate: (payload: Record<string, unknown>) =>
     request("/api/v1/webhooks/mock", {

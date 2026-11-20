@@ -29,6 +29,8 @@ export function CalendarPage({
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [title, setTitle] = useState("");
   const [copyText, setCopyText] = useState("");
+  const [notesInternal, setNotesInternal] = useState("");
+  const [notesClient, setNotesClient] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -111,6 +113,8 @@ export function CalendarPage({
                 clientId,
                 title,
                 copyText,
+                notesInternal: notesInternal || undefined,
+                notesClient: notesClient || undefined,
                 imageUrl: imageUrl || undefined,
                 scheduledAt: scheduledAt
                   ? new Date(scheduledAt).toISOString()
@@ -119,6 +123,8 @@ export function CalendarPage({
               .then(() => {
                 setTitle("");
                 setCopyText("");
+                setNotesInternal("");
+                setNotesClient("");
                 setImageUrl("");
                 setScheduledAt("");
                 setError(null);
@@ -141,6 +147,22 @@ export function CalendarPage({
               rows={3}
               value={copyText}
               onChange={(event) => setCopyText(event.target.value)}
+            />
+          </label>
+          <label>
+            Internal notes
+            <textarea
+              rows={2}
+              value={notesInternal}
+              onChange={(event) => setNotesInternal(event.target.value)}
+            />
+          </label>
+          <label>
+            Client notes
+            <textarea
+              rows={2}
+              value={notesClient}
+              onChange={(event) => setNotesClient(event.target.value)}
             />
           </label>
           <label>

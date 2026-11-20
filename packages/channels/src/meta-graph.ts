@@ -548,6 +548,96 @@ export async function listInstagramMediaComments(
   return comments;
 }
 
+export type AdCreativeIgMedia = {
+  creativeId: string;
+  mediaId: string;
+  permalink?: string;
+  name?: string;
+};
+
+/**
+ * List ad creatives that expose Instagram ad media (ADR-027 / RF-14).
+ * Requires `ads_read` (or ads_management) on the token.
+ */
+export async function listAdCreativesWithIgMedia(
+  config: MetaGraphConfig,
+  input: { accessToken: string; adAccountId: string; limit?: number },
+): Promise<AdCreativeIgMedia[]> {
+  const accountId = input.adAccountId.startsWith("act_")
+    ? input.adAccountId
+    : `act_${input.adAccountId}`;
+  const response = await graphRequest<{
+    data?: Array<{
+      id: string;
+      name?: string;
+      effective_instagram_media_id?: string;
+      instagram_permalink_url?: string;
+    }>;
+  }>(config, {
+    path: `/${accountId}/adcreatives`,
+    accessToken: input.accessToken,
+    query: {
+      fields: "id,name,effective_instagram_media_id,instagram_permalink_url",
+      limit: String(input.limit ?? 25),
+    },
+  });
+
+  const creatives: AdCreativeIgMedia[] = [];
+  for (const row of response.data ?? []) {
+    if (!row.effective_instagram_media_id) {
+      continue;
+    }
+    creatives.push({
+      creativeId: row.id,
+      mediaId: row.effective_instagram_media_id,
+      permalink: row.instagram_permalink_url,
+      name: row.name,
+    });
+  }
+  return creatives;
+}
+
+/**
+ * Comments on ad media (`effective_instagram_media_id`). Non-boosted ads
+ * return non-organic comments only; boosted posts may mix organic + ad.
+ */
+export async function listInstagramAdMediaComments(
+  config: MetaGraphConfig,
+  input: { accessToken: string; mediaId: string },
+): Promise<InstagramMediaComment[]> {
+  const response = await graphRequest<{
+    data?: Array<{
+      id: string;
+      text?: string;
+      username?: string;
+      timestamp?: string;
+      parent_id?: string;
+      from?: { id?: string; username?: string; name?: string };
+      legacy_instagram_comment_id?: string;
+    }>;
+  }>(config, {
+    path: `/${input.mediaId}/comments`,
+    accessToken: input.accessToken,
+    query: {
+      fields:
+        "id,text,username,timestamp,from,parent_id,legacy_instagram_comment_id",
+      limit: "50",
+    },
+  });
+
+  return (response.data ?? []).map((comment) => ({
+    mediaId: input.mediaId,
+    commentId: comment.id,
+    body: comment.text ?? "",
+    authorExternalId: comment.from?.id ?? comment.username ?? "unknown",
+    authorDisplayName:
+      comment.from?.username ?? comment.from?.name ?? comment.username,
+    parentId: comment.parent_id,
+    occurredAt: parseGraphTime(comment.timestamp),
+    legacyId: comment.legacy_instagram_comment_id,
+  }));
+}
+
 export async function fetchInstagramMedia(
   config: MetaGraphConfig,
   input: { accessToken: string; mediaId: string },
