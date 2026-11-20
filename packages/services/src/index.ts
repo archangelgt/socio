@@ -114,13 +114,33 @@ export {
 } from "./scopes";
 export { completeMetaOAuth, startMetaOAuth } from "./meta";
 export { ingestWebhook, processInboundEvent } from "./inbound";
-export { syncInstagramComments } from "./sync";
+export {
+  syncInstagramAdComments,
+  syncInstagramComments,
+} from "./sync";
 export {
   humanModerate,
   listModerationQueue,
   overrideCommentUrgency,
   processModeration,
 } from "./moderate";
+export {
+  createTag,
+  listCommentTags,
+  listTags,
+  tagComment,
+  untagComment,
+} from "./tags";
+export {
+  assignComment,
+  listAssignableMembers,
+  updateCommentCase,
+} from "./cases";
+export { getModerationMetrics } from "./metrics";
+export {
+  DEFAULT_ES_EVAL_FIXTURES,
+  evaluateModerationSamples,
+} from "./eval";
 export { processOutboundAction } from "./outbound";
 export { getPost, listComments, listConversations } from "./comments";
 export { getPostPreview, hydrateMissingPostMedia } from "./posts";

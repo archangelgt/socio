@@ -185,7 +185,13 @@ Reason: piloto Team invites and Andy onboarding need email delivery without stan
 
 ## ADR-027 — Meta Ads comments (RF-14) path
 
-Decision: store paid/promoted provenance on `comments` (`origin`, `ad_external_id`, `creative_external_id`, `campaign_external_id`) and filter the existing moderation queue rather than a separate ads product. Live Meta pull uses Marketing API creative → `effective_instagram_media_id` → IG `/comments` (non-organic); hide/unhide reuse Instagram comment moderation. Permissions: `instagram_manage_comments` plus `ads_read` or `ads_management` when Page role is via Business Manager. Mock webhooks may set `origin=ad` for piloto acceptance without Marketing API tokens. Full Ad Account sync / Advantage+ catalog ads remain out of scope until Meta app review grants ads scopes.
+Decision: store paid/promoted provenance on `comments` (`origin`, `ad_external_id`, `creative_external_id`, `campaign_external_id`) and filter the existing moderation queue rather than a separate ads product. Live Meta pull uses Marketing API creative → `effective_instagram_media_id` → IG `/comments` (non-organic); hide/unhide reuse Instagram comment moderation. Permissions: `instagram_manage_comments` plus `ads_read` or `ads_management` when Page role is via Business Manager. OAuth scope list includes `ads_read`. `POST /api/v1/comments/sync-ads` accepts `adAccountId` and/or explicit creative/media IDs. Mock webhooks may set `origin=ad` for piloto acceptance without Marketing API tokens. Full Advantage+ catalog ads remain out of scope until Meta app review grants ads scopes.
 
 Reason: RF-14 wants one bandeja with organic + pauta; Meta docs separate organic vs non-organic media IDs, so provenance columns + queue filter are the minimal contract.
+
+## ADR-029 — Cases, tags, assign, and ES eval (piloto close-out)
+
+Decision: expose schema already present for comment `case_kind` / `attention_due_at` / `assigned_user_id` and org `tags`/`taggings` via API + Moderation UI. Thin `GET /api/v1/moderation/metrics` counts analyzed/auto-hidden/review/FP(overridden). Labeled dry-run eval is `POST /api/v1/moderation/eval` with optional default Spanish GT/CA fixtures (RF-21) — no outbound. TikTok/YouTube/X stay out of piloto.
+
+Reason: AndyMorales piloto acceptance needs assign/tags/casos and measurable Spanish moderation without opening new channel adapters.
 

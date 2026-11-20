@@ -17,6 +17,10 @@ export function AdsPage({
     Awaited<ReturnType<typeof api.channels>>["channels"]
   >([]);
   const [body, setBody] = useState("Esta oferta de pauta es un engaño.");
+  const [adAccountId, setAdAccountId] = useState("");
+  const [creativeId, setCreativeId] = useState("");
+  const [mediaId, setMediaId] = useState("");
+  const [syncResult, setSyncResult] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const reload = useCallback(() => {
@@ -43,12 +47,76 @@ export function AdsPage({
         <h1>Ads bandeja</h1>
         <p className="muted">
           Paid and boosted comments in the same moderation queue (RF-14). Live
-          Meta pull needs Marketing API{" "}
-          <code>effective_instagram_media_id</code> + <code>ads_read</code>/
-          <code>ads_management</code> — until then, mock webhooks with{" "}
-          <code>origin=ad</code>.
+          pull uses Marketing API creatives →{" "}
+          <code>effective_instagram_media_id</code> → IG comments (
+          <code>ads_read</code>). Mock path still works without tokens.
         </p>
       </header>
+
+      <section className="panel team-panel">
+        <h2>Sync Meta ad comments</h2>
+        <form
+          className="team-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setBusy(true);
+            const creatives =
+              creativeId.trim() && mediaId.trim()
+                ? [
+                    {
+                      creativeId: creativeId.trim(),
+                      mediaId: mediaId.trim(),
+                    },
+                  ]
+                : undefined;
+            void api
+              .syncAds(organizationId, {
+                adAccountId: adAccountId.trim() || undefined,
+                creatives,
+              })
+              .then((data) => {
+                setSyncResult(
+                  `Seen ${data.seen}, ingested ${data.ingested}, creatives ${data.creatives}${
+                    data.warnings.length
+                      ? ` · ${data.warnings.join(" | ")}`
+                      : ""
+                  }`,
+                );
+                setError(null);
+                reload();
+              })
+              .catch((err: Error) => setError(err.message))
+              .finally(() => setBusy(false));
+          }}
+        >
+          <label>
+            Ad account ID (optional, act_…)
+            <input
+              value={adAccountId}
+              onChange={(e) => setAdAccountId(e.target.value)}
+              placeholder="act_123…"
+            />
+          </label>
+          <label>
+            Creative ID (manual)
+            <input
+              value={creativeId}
+              onChange={(e) => setCreativeId(e.target.value)}
+            />
+          </label>
+          <label>
+            effective_instagram_media_id
+            <input
+              value={mediaId}
+              onChange={(e) => setMediaId(e.target.value)}
+            />
+          </label>
+          <button type="submit" disabled={busy}>
+            Sync ad comments
+          </button>
+        </form>
+        {syncResult ? <p className="muted">{syncResult}</p> : null}
+      </section>
 
       {mockChannel ? (
         <section className="panel team-panel">

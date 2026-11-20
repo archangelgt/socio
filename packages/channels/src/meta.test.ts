@@ -4,6 +4,8 @@ import { ChannelProviderError } from "./errors";
 import { MetaChannelAdapter } from "./meta";
 import {
   hideCandidateIds,
+  listAdCreativesWithIgMedia,
+  listInstagramAdMediaComments,
   listInstagramMediaComments,
   matchInstagramComment,
   pickMediaThumbnail,
@@ -419,6 +421,75 @@ describe("MetaChannelAdapter", () => {
         permalink: "https://www.instagram.com/p/abc/",
       }),
     ]);
+  });
+
+  it("lists ad creatives with effective Instagram media", async () => {
+    const fetchImpl = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "cr_1",
+              name: "Promo",
+              effective_instagram_media_id: "ig_media_9",
+              instagram_permalink_url: "https://www.instagram.com/p/xyz/",
+            },
+            { id: "cr_2", name: "No media" },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+    const creatives = await listAdCreativesWithIgMedia(
+      {
+        graphVersion: "v21.0",
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      },
+      { accessToken: "token", adAccountId: "123" },
+    );
+    expect(creatives).toEqual([
+      {
+        creativeId: "cr_1",
+        mediaId: "ig_media_9",
+        permalink: "https://www.instagram.com/p/xyz/",
+        name: "Promo",
+      },
+    ]);
+    const firstUrl = fetchImpl.mock.calls.at(0)?.at(0);
+    expect(String(firstUrl)).toContain("/act_123/");
+  });
+
+  it("lists comments on ad media", async () => {
+    const fetchImpl = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "c_ad",
+              text: "estafa",
+              username: "buyer",
+              timestamp: "2026-11-20T12:00:00+0000",
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+    const comments = await listInstagramAdMediaComments(
+      {
+        graphVersion: "v21.0",
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      },
+      { accessToken: "token", mediaId: "ig_media_9" },
+    );
+    expect(comments[0]).toEqual(
+      expect.objectContaining({
+        mediaId: "ig_media_9",
+        commentId: "c_ad",
+        body: "estafa",
+        authorDisplayName: "buyer",
+      }),
+    );
   });
 
   it("picks image, video, and carousel thumbnails", async () => {

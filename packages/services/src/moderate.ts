@@ -35,6 +35,7 @@ import { AppError } from "./errors";
 import { enqueueOutboundAction } from "./outbound";
 import { thumbnailFromMetadata } from "./posts";
 import { assertClientAllowed, clientScopeIds } from "./scopes";
+import { tagsForComments } from "./tags";
 
 function publicProviderError(error: unknown): string {
   const raw = error instanceof Error ? error.message : "Unknown error";
@@ -427,6 +428,9 @@ export async function listModerationQueue(
     )
     .limit(100);
 
+  const commentIds = rows.map((row) => row.commentId);
+  const tagMap = await tagsForComments(db, organizationId, commentIds);
+
   return rows.map((row) => {
     const urgency = effectiveUrgency(row.urgency, row.urgencyOverride);
     return {
@@ -446,6 +450,7 @@ export async function listModerationQueue(
       campaignExternalId: row.campaignExternalId,
       assignedUserId: row.assignedUserId,
       attentionDueAt: row.attentionDueAt,
+      tags: tagMap.get(row.commentId) ?? [],
       confidence: row.confidence,
       recommendedAction: row.recommendedAction,
       finalAction: row.finalAction,

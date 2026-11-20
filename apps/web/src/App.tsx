@@ -1096,12 +1096,31 @@ function ModerationPage({
   const [items, setItems] = useState<
     Awaited<ReturnType<typeof api.queue>>["items"]
   >([]);
+  const [assignees, setAssignees] = useState<
+    Awaited<ReturnType<typeof api.assignees>>["members"]
+  >([]);
+  const [tags, setTags] = useState<
+    Awaited<ReturnType<typeof api.tags>>["tags"]
+  >([]);
+  const [newTag, setNewTag] = useState("");
+  const [metrics, setMetrics] = useState<
+    Awaited<ReturnType<typeof api.moderationMetrics>>["metrics"] | null
+  >(null);
   const [syncing, setSyncing] = useState(false);
 
   const reload = useCallback(() => {
-    void api
-      .queue(organizationId, undefined, clientId)
-      .then((data) => setItems(data.items))
+    void Promise.all([
+      api.queue(organizationId, undefined, clientId),
+      api.assignees(organizationId),
+      api.tags(organizationId),
+      api.moderationMetrics(organizationId, clientId),
+    ])
+      .then(([queueData, assigneeData, tagData, metricsData]) => {
+        setItems(queueData.items);
+        setAssignees(assigneeData.members);
+        setTags(tagData.tags);
+        setMetrics(metricsData.metrics);
+      })
       .catch((err: Error) => setError(err.message));
   }, [organizationId, clientId, setError]);
 
@@ -1131,6 +1150,51 @@ function ModerationPage({
           </button>
         </div>
       </header>
+      {metrics ? (
+        <section className="panel team-panel">
+          <h2>Metrics</h2>
+          <p className="muted">
+            Analyzed {metrics.analyzed} · Auto-hidden {metrics.autoHidden} ·
+            Review {metrics.reviewRequired} · FP (overridden){" "}
+            {metrics.falsePositives} · Cases {metrics.casesOpen} · RED{" "}
+            {metrics.redUrgency}
+          </p>
+        </section>
+      ) : null}
+      <section className="panel team-panel">
+        <h2>Tags</h2>
+        <form
+          className="team-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!newTag.trim()) {
+              return;
+            }
+            void api
+              .createTag(organizationId, newTag.trim())
+              .then(() => {
+                setNewTag("");
+                reload();
+              })
+              .catch((err: Error) => setError(err.message));
+          }}
+        >
+          <label>
+            New tag
+            <input
+              value={newTag}
+              onChange={(event) => setNewTag(event.target.value)}
+              placeholder="reclamo, spam…"
+            />
+          </label>
+          <button type="submit">Add tag</button>
+        </form>
+        <p className="muted">
+          {tags.length === 0
+            ? "No tags yet."
+            : tags.map((tag) => tag.name).join(" · ")}
+        </p>
+      </section>
       {items.length === 0 ? (
         <div className="panel empty">
           <img src="/brand/icon.png" alt="" />
@@ -1148,6 +1212,7 @@ function ModerationPage({
                 <th>Comment</th>
                 <th>When</th>
                 <th>Status</th>
+                <th>Case / assign</th>
                 <th>Urgency</th>
                 <th>Confidence</th>
                 <th />
@@ -1164,8 +1229,11 @@ function ModerationPage({
                         <div>
                           <strong>{item.authorDisplayName ?? "Unknown"}</strong>
                           <div>{item.body}</div>
-                          {item.caseKind && item.caseKind !== "none" ? (
-                            <div className="muted">Case: {item.caseKind}</div>
+                          {item.tags && item.tags.length > 0 ? (
+                            <div className="muted">
+                              Tags:{" "}
+                              {item.tags.map((tag) => tag.name).join(", ")}
+                            </div>
                           ) : null}
                           {item.origin && item.origin !== "organic" ? (
                             <div className="muted">
@@ -1178,6 +1246,34 @@ function ModerationPage({
                           {item.rationale ? (
                             <div className="muted">{item.rationale}</div>
                           ) : null}
+                          {tags.length > 0 ? (
+                            <select
+                              className="urgency-select"
+                              defaultValue=""
+                              onChange={(event) => {
+                                const tagId = event.target.value;
+                                event.target.value = "";
+                                if (!tagId) {
+                                  return;
+                                }
+                                void api
+                                  .tagComment(
+                                    organizationId,
+                                    item.commentId,
+                                    tagId,
+                                  )
+                                  .then(reload)
+                                  .catch((err: Error) => setError(err.message));
+                              }}
+                            >
+                              <option value="">Add tag…</option>
+                              {tags.map((tag) => (
+                                <option key={tag.id} value={tag.id}>
+                                  {tag.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : null}
                         </div>
                         <PostThumb
                           postId={item.postId}
@@ -1188,6 +1284,52 @@ function ModerationPage({
                     <td className="muted when">{formatWhen(item.createdAt)}</td>
                     <td>
                       <StatusBadge status={status} />
+                    </td>
+                    <td>
+                      <select
+                        className="urgency-select"
+                        value={item.caseKind ?? "none"}
+                        onChange={(event) => {
+                          void api
+                            .setCase(organizationId, item.commentId, {
+                              caseKind: event.target.value,
+                            })
+                            .then(reload)
+                            .catch((err: Error) => setError(err.message));
+                        }}
+                      >
+                        <option value="none">none</option>
+                        <option value="attention">attention</option>
+                        <option value="complaint">complaint</option>
+                        <option value="scam">scam</option>
+                      </select>
+                      {item.attentionDueAt ? (
+                        <div className="muted">
+                          Due {formatWhen(item.attentionDueAt)}
+                        </div>
+                      ) : null}
+                      <select
+                        className="urgency-select"
+                        value={item.assignedUserId ?? ""}
+                        onChange={(event) => {
+                          const value = event.target.value || null;
+                          void api
+                            .assignComment(
+                              organizationId,
+                              item.commentId,
+                              value,
+                            )
+                            .then(reload)
+                            .catch((err: Error) => setError(err.message));
+                        }}
+                      >
+                        <option value="">Unassigned</option>
+                        {assignees.map((member) => (
+                          <option key={member.userId} value={member.userId}>
+                            {member.name}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                     <td>
                       <span

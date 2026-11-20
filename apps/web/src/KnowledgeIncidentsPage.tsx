@@ -348,6 +348,9 @@ export function SimulatePage({
   const [result, setResult] = useState<Awaited<
     ReturnType<typeof api.simulatePolicy>
   > | null>(null);
+  const [evalResult, setEvalResult] = useState<Awaited<
+    ReturnType<typeof api.evalModeration>
+  > | null>(null);
   const [busy, setBusy] = useState(false);
 
   return (
@@ -355,8 +358,8 @@ export function SimulatePage({
       <header>
         <h1>Policy simulation</h1>
         <p className="muted">
-          Compare current vs proposed confidence threshold on sample comments —
-          no actions on the network.
+          Compare thresholds and run Spanish (GT/CA) labeled eval — no actions
+          on the network.
         </p>
       </header>
       <section className="panel team-panel">
@@ -406,6 +409,74 @@ export function SimulatePage({
             Run simulation
           </button>
         </form>
+      </section>
+      <section className="panel team-panel">
+        <h2>Eval español (RF-21)</h2>
+        <p className="muted">
+          Fixture pack GT/CA: crítica política vs odio/estafa. Mide FP/FN vs
+          política actual.
+        </p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            void api
+              .evalModeration(organizationId, {
+                clientId,
+                useDefaultFixtures: true,
+              })
+              .then((data) => {
+                setEvalResult(data);
+                setError(null);
+              })
+              .catch((err: Error) => setError(err.message))
+              .finally(() => setBusy(false));
+          }}
+        >
+          Run default ES fixtures
+        </button>
+        {evalResult ? (
+          <div className="table-wrap" style={{ marginTop: "1rem" }}>
+            <p className="muted">
+              Accuracy {(evalResult.accuracy * 100).toFixed(0)}% · Precision{" "}
+              {evalResult.precision == null
+                ? "—"
+                : `${(evalResult.precision * 100).toFixed(0)}%`}{" "}
+              · Recall{" "}
+              {evalResult.recall == null
+                ? "—"
+                : `${(evalResult.recall * 100).toFixed(0)}%`}{" "}
+              · FP {evalResult.falsePositive} · FN {evalResult.falseNegative}
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Sample</th>
+                  <th>Expect</th>
+                  <th>Predicted</th>
+                </tr>
+              </thead>
+              <tbody>
+                {evalResult.results.map((row) => (
+                  <tr key={row.text}>
+                    <td>
+                      {row.text}
+                      <div className="muted">
+                        {row.severity} · {Math.round(row.confidence * 100)}%
+                      </div>
+                    </td>
+                    <td>{row.expectHide ? "HIDE" : "ALLOW"}</td>
+                    <td>
+                      {row.predictedHide ? "HIDE" : "ALLOW"}
+                      {row.correct ? "" : " ✗"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </section>
       {result ? (
         <section className="panel team-panel">

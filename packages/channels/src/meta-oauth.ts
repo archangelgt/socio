@@ -12,6 +12,8 @@ export const META_OAUTH_SCOPES = [
   "instagram_manage_comments",
   "instagram_manage_messages",
   "business_management",
+  /** RF-14 ads comments — Marketing API creatives → effective_instagram_media_id */
+  "ads_read",
 ].join(",");
 
 export type MetaOAuthState = {

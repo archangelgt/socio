@@ -146,9 +146,14 @@ PUT   /api/v1/moderation/policies/:id/rules
 
 ```text
 GET /api/v1/moderation/metrics
+POST /api/v1/moderation/eval
+POST /api/v1/comments/sync-ads
+POST /api/v1/comments/:id/assign
+POST /api/v1/comments/:id/case
+GET  /api/v1/assignees
 ```
 
-Counts: analyzed, allowed, auto-hidden, review required, action failures, false positives, by category. Not the Phase 8 analytics product.
+Counts: analyzed, allowed, auto-hidden, review required, action failures, false positives, by category. Eval is labeled dry-run FP/FN (no outbound). Not the Phase 8 analytics product.
 
 ## Webhooks
 

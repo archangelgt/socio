@@ -5,6 +5,7 @@ import { isMetaProvider, metaWebhookChallenge } from "@social-ai/channels";
 import type { Database } from "@social-ai/db";
 import {
   AppError,
+  DEFAULT_ES_EVAL_FIXTURES,
   type MetaConfig,
   type ServiceContext,
   acceptInvitation,
@@ -12,6 +13,7 @@ import {
   addOrganizationMember,
   addShareFeedback,
   assertBrandInAccess,
+  assignComment,
   buildInviteEmail,
   checkoutConfigFromEnv,
   clientAccessFromMembership,
@@ -26,9 +28,12 @@ import {
   createInvitation,
   createKnowledgeDocument,
   createMonthShareLink,
+  createTag,
   disconnectChannel,
+  evaluateModerationSamples,
   exportIncidentDossier,
   getAppError,
+  getModerationMetrics,
   getPost,
   getPostPreview,
   getSharedMonth,
@@ -37,9 +42,11 @@ import {
   hydrateMissingPostMedia,
   ingestWebhook,
   isUniqueViolation,
+  listAssignableMembers,
   listBrands,
   listChannels,
   listClients,
+  listCommentTags,
   listComments,
   listContentPieces,
   listConversations,
@@ -49,6 +56,7 @@ import {
   listModerationQueue,
   listOrganizationMembers,
   listPieceDestinations,
+  listTags,
   loginUser,
   logoutSession,
   overrideCommentUrgency,
@@ -69,7 +77,11 @@ import {
   setMembershipClientScopes,
   simulateModerationPolicy,
   startMetaOAuth,
+  syncInstagramAdComments,
   syncInstagramComments,
+  tagComment,
+  untagComment,
+  updateCommentCase,
   updateContentPieceStatus,
   updateIncidentStatus,
   updateKnowledgeDocument,
@@ -703,6 +715,8 @@ export async function buildApp(options: AppOptions) {
         brandId: z.string().uuid().optional(),
         title: z.string().min(1),
         copyText: z.string().optional(),
+        notesInternal: z.string().optional(),
+        notesClient: z.string().optional(),
         imageUrl: z.string().url().optional(),
         scheduledAt: z.string().optional().nullable(),
         timezone: z.string().optional(),
@@ -717,6 +731,8 @@ export async function buildApp(options: AppOptions) {
       brandId: body.brandId,
       title: body.title,
       copyText: body.copyText,
+      notesInternal: body.notesInternal,
+      notesClient: body.notesClient,
       imageUrl: body.imageUrl,
       scheduledAt: body.scheduledAt,
       timezone: body.timezone,
@@ -1122,6 +1138,164 @@ export async function buildApp(options: AppOptions) {
     };
   });
 
+  app.post("/api/v1/comments/:id/assign", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    const access = clientAccessFromMembership(membership);
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z
+      .object({ assignedUserId: z.string().uuid().nullable() })
+      .parse(request.body);
+    return {
+      assignment: await assignComment(ctx.db, {
+        organizationId: membership.organizationId,
+        actorId: session.user.id,
+        access,
+        commentId: params.id,
+        assignedUserId: body.assignedUserId,
+      }),
+    };
+  });
+
+  app.post("/api/v1/comments/:id/case", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    const access = clientAccessFromMembership(membership);
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z
+      .object({
+        caseKind: z.enum(["none", "attention", "complaint", "scam"]),
+        attentionDueAt: z.string().datetime().nullable().optional(),
+      })
+      .parse(request.body);
+    return {
+      case: await updateCommentCase(ctx.db, {
+        organizationId: membership.organizationId,
+        actorId: session.user.id,
+        access,
+        commentId: params.id,
+        caseKind: body.caseKind,
+        attentionDueAt: body.attentionDueAt,
+      }),
+    };
+  });
+
+  app.get("/api/v1/tags", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "VIEWER",
+    );
+    const query = z
+      .object({ brandId: z.string().uuid().optional() })
+      .parse(request.query);
+    return {
+      tags: await listTags(ctx.db, membership.organizationId, query.brandId),
+    };
+  });
+
+  app.post("/api/v1/tags", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    const body = z
+      .object({
+        name: z.string().min(1),
+        brandId: z.string().uuid().optional(),
+      })
+      .parse(request.body);
+    return {
+      tag: await createTag(ctx.db, {
+        organizationId: membership.organizationId,
+        actorId: session.user.id,
+        name: body.name,
+        brandId: body.brandId,
+      }),
+    };
+  });
+
+  app.get("/api/v1/comments/:id/tags", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "VIEWER",
+    );
+    const access = clientAccessFromMembership(membership);
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    return {
+      tags: await listCommentTags(
+        ctx.db,
+        membership.organizationId,
+        params.id,
+        access,
+      ),
+    };
+  });
+
+  app.post("/api/v1/comments/:id/tags", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    const access = clientAccessFromMembership(membership);
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = z.object({ tagId: z.string().uuid() }).parse(request.body);
+    return tagComment(ctx.db, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      access,
+      commentId: params.id,
+      tagId: body.tagId,
+    });
+  });
+
+  app.delete("/api/v1/comments/:id/tags/:tagId", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    const access = clientAccessFromMembership(membership);
+    const params = z
+      .object({ id: z.string().uuid(), tagId: z.string().uuid() })
+      .parse(request.params);
+    return untagComment(ctx.db, {
+      organizationId: membership.organizationId,
+      actorId: session.user.id,
+      access,
+      commentId: params.id,
+      tagId: params.tagId,
+    });
+  });
+
+  app.get("/api/v1/assignees", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    return {
+      members: await listAssignableMembers(ctx.db, membership.organizationId),
+    };
+  });
+
   app.get("/api/v1/brands", async (request) => {
     const { ctx, session } = await loadSession(request);
     const membership = requireMembership(
@@ -1297,6 +1471,99 @@ export async function buildApp(options: AppOptions) {
     );
     const access = clientAccessFromMembership(membership);
     return syncInstagramComments(ctx, membership.organizationId, access);
+  });
+
+  app.post("/api/v1/comments/sync-ads", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MODERATOR",
+    );
+    const access = clientAccessFromMembership(membership);
+    const body = z
+      .object({
+        socialAccountId: z.string().uuid().optional(),
+        adAccountId: z.string().min(1).optional(),
+        creatives: z
+          .array(
+            z.object({
+              creativeId: z.string().min(1),
+              mediaId: z.string().min(1),
+              adExternalId: z.string().optional(),
+              campaignExternalId: z.string().optional(),
+              permalink: z.string().url().optional(),
+            }),
+          )
+          .optional(),
+      })
+      .parse(request.body ?? {});
+    return syncInstagramAdComments(
+      ctx,
+      membership.organizationId,
+      access,
+      body,
+    );
+  });
+
+  app.get("/api/v1/moderation/metrics", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "VIEWER",
+    );
+    const access = clientAccessFromMembership(membership);
+    const selectedClientId = clientIdQuery(request);
+    if (selectedClientId) {
+      z.string().uuid().parse(selectedClientId);
+    }
+    return {
+      metrics: await getModerationMetrics(
+        ctx.db,
+        membership.organizationId,
+        access,
+        selectedClientId,
+      ),
+    };
+  });
+
+  app.post("/api/v1/moderation/eval", async (request) => {
+    const { ctx, session } = await loadSession(request);
+    const membership = requireMembership(
+      session.memberships,
+      orgId(request),
+      "MANAGER",
+    );
+    const access = clientAccessFromMembership(membership);
+    const body = z
+      .object({
+        clientId: z.string().uuid(),
+        brandId: z.string().uuid().optional(),
+        useDefaultFixtures: z.boolean().optional(),
+        cases: z
+          .array(
+            z.object({
+              text: z.string().min(1),
+              expectHide: z.boolean(),
+              locale: z.string().optional(),
+            }),
+          )
+          .optional(),
+      })
+      .parse(request.body);
+    const cases =
+      body.useDefaultFixtures || !body.cases || body.cases.length === 0
+        ? DEFAULT_ES_EVAL_FIXTURES
+        : body.cases;
+    return evaluateModerationSamples(ctx, {
+      organizationId: membership.organizationId,
+      role: membership.role,
+      access,
+      clientId: body.clientId,
+      brandId: body.brandId,
+      cases,
+    });
   });
 
   app.get("/api/v1/conversations", async (request) => {
